@@ -2,10 +2,10 @@
 
 ## Reporting a vulnerability
 
-Please do not open a public issue. Report privately through GitHub's "Report a vulnerability" button on the Security tab
-of this repository (or email the maintainers at the address in `package.json` once it is set). Include what you found, how
-to reproduce it and the version. You will get an answer within a few days. Fixes are released as patch versions and credited
-unless you ask otherwise.
+Please do not open a public issue containing a vulnerability. Use
+[GitHub's private vulnerability reporting form](https://github.com/vmatheus3/bug-frame/security/advisories/new).
+Include what you found, how to reproduce it, and the affected version. Maintainers will review the report and coordinate
+a fix privately. Fixes are released as patch versions and credited unless you ask otherwise.
 
 ## Supported versions
 

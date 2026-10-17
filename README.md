@@ -1,8 +1,18 @@
 # Bugframe
 
+[![CI](https://github.com/vmatheus3/bug-frame/actions/workflows/ci.yml/badge.svg)](https://github.com/vmatheus3/bug-frame/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-c2410c.svg)](LICENSE)
+[![Download](https://img.shields.io/badge/download-v0.1.0-c2410c.svg)](https://github.com/vmatheus3/bug-frame/releases/tag/v0.1.0)
+
+![Bugframe: frame the bug and send the context](docs/images/bugframe-overview.png)
+
 **Drag a box around what is wrong, say what you expected, press send.** Bugframe is a small drop-in "report a problem"
 button for any website or web app. Every report arrives with a screenshot of the exact area, the page link, the screen
 size, the element under the box and the recent console errors, ready for a person or an AI coding agent to fix.
+
+**Free and open source, under the MIT license.** Use it in personal or commercial projects, modify it, and share it.
+Run it on your own infrastructure or download reports as ZIP files. No Bugframe account or subscription is required;
+you cover any hosting you choose and any optional AI service you use to fix reports. Console capture is opt-in.
 
 ```
  tester / owner                 your site                  your server               you or your AI agent
@@ -14,9 +24,18 @@ size, the element under the box and the recent console errors, ready for a perso
   "My reports" ◀──────────── status + fix note  ◀─────────  full.png                   bugframe close <id> --note …
 ```
 
-> **The name.** "Bugframe" is the *frame* you draw around the *bug*. Two alternatives if you want to rename before publishing:
-> **boxbug** (it is a box around a bug) and **pinbug** (you pin the problem on the page). A project-wide search for `bugframe`
-> finds every place to change (package name, CLI, header names, data attributes, folder names).
+## How it works
+
+1. Open your page with `?bugs=1`, click the bug button, and choose **Report a problem on this page**.
+2. Drag a box around the problem, describe what you expected, and send the report.
+3. Review the screenshot and page context, fix the problem, and close the report with a note.
+
+| Frame the problem | Describe it and send |
+| --- | --- |
+| ![Select the wrong invoice total](docs/images/frame-the-problem.png) | ![Describe the problem and send the report](docs/images/describe-and-send.png) |
+
+These images are illustrative mockups of the workflow on a fictional website, generated with the built-in imagegen tool.
+The runnable demo below uses the actual widget. Image files and the final generation prompts are in [docs/MOCKUPS.md](docs/MOCKUPS.md).
 
 ## Why
 
@@ -29,15 +48,41 @@ size, the element under the box and the recent console errors, ready for a perso
 
 ## 5-minute quick start
 
+Try the complete widget and server locally with Node.js 18.17+:
+
 ```bash
-npm install bugframe          # or use the <script> tag below, no install
+git clone https://github.com/vmatheus3/bug-frame.git
+cd bug-frame
+npm ci
+npm run build
+npm run example
+```
+
+Open <http://127.0.0.1:4455/?bugs=1>. The invoice total is wrong on purpose: report it, then try **My reports**.
+The demo stores reports in `examples/plain-html/reports/` and uses demonstration tokens; configure your own when integrating it.
+In another terminal in the repository:
+
+```bash
+node src/cli/bin.mjs --dir ./examples/plain-html/reports list
+node src/cli/bin.mjs --dir ./examples/plain-html/reports export
+node src/cli/bin.mjs --dir ./examples/plain-html/reports close <id> --note "Fixed the overlapping footer"
+```
+
+### Add it to your own project
+
+Install the built package from the [GitHub release](https://github.com/vmatheus3/bug-frame/releases/tag/v0.1.0).
+This installation does not depend on a package named `bugframe` being published to the npm registry:
+
+```bash
+npm install https://github.com/vmatheus3/bug-frame/releases/download/v0.1.0/bugframe-0.1.0.tgz
 npx bugframe serve --dir ./bug-reports --port 4455 --client-token demo --admin-token change-me
 ```
 
+For a script tag, download `bugframe.min.js` from the same release and serve it from your site's `/vendor/` directory.
 Add the widget to any page (script tag, no build step):
 
 ```html
-<script src="https://cdn.jsdelivr.net/npm/bugframe@0.1.0/dist/bugframe.min.js"
+<script src="/vendor/bugframe.min.js"
         data-endpoint="http://localhost:4455" data-token="demo"></script>
 ```
 
@@ -56,8 +101,7 @@ npx bugframe --dir ./bug-reports close <id> --note "Fixed the overlapping footer
 No server at all? Use download mode: add `data-download` instead of `data-endpoint`. Each report is saved as a `.zip` the tester
 sends you; `npx bugframe import report.zip` unpacks it. See [examples/static-download](examples/static-download).
 
-Want to see it first? `git clone` this repo, then `npm install && npm run build && npm run example` and open
-<http://127.0.0.1:4455/?bugs=1>.
+The release includes the standalone browser bundle, an installable package with types, and a checksum file.
 
 ## Install for any stack
 
@@ -259,6 +303,9 @@ reports as plain files that an AI agent can read, with nothing to sign up for.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md). `npm run test:all` runs typecheck, unit/server/CLI tests, the build and the
 Playwright end-to-end test.
+
+Found a problem or have an idea? [Open an issue](https://github.com/vmatheus3/bug-frame/issues/new/choose).
+Translations, integration examples, documentation improvements, and fixes are welcome.
 
 ## License
 

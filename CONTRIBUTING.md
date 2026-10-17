@@ -5,12 +5,16 @@ Thanks for helping. The project is small on purpose: a widget, a reference serve
 ## Setup
 
 ```bash
-git clone <your fork> && cd bugframe
-npm install
+git clone https://github.com/vmatheus3/bug-frame.git
+cd bug-frame
+npm ci
+npx playwright install chromium
 npm run test:all        # typecheck, unit + server + CLI tests, build, Playwright end-to-end
 ```
 
-The first `npm run test:e2e` needs a browser: `npx playwright install chromium`.
+For a contribution, fork the repository on GitHub and clone your fork instead. Create a branch for your change,
+run the checks above, and open a pull request against `main`. For bugs and feature requests,
+[open an issue](https://github.com/vmatheus3/bug-frame/issues/new/choose). Security reports follow [SECURITY.md](SECURITY.md).
 
 ## Layout
 

@@ -8,6 +8,8 @@ uses [Semantic Versioning](https://semver.org/).
 First public release.
 
 ### Added
+- Public community repository, MIT licensing, illustrated usage guide, contribution and issue links, and downloadable
+  browser bundle and package through GitHub Releases.
 - Widget: Shadow DOM floating button, drag/touch/keyboard region selection or whole screen, description and type chips,
   region and full screenshots (html-to-image), viewport, URL (secrets redacted), element path under the box, optional
   console errors, custom metadata hook, input/password/`data-bug-mask` masking, "My reports" with status and fix note,

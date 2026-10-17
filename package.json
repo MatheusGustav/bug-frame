@@ -4,7 +4,10 @@
   "description": "Drag a box around what is wrong, describe it, send it. A drop-in bug reporter for any website, with a tiny server, a CLI and a ready-made prompt that lets an AI coding agent fix every report in one pass.",
   "keywords": ["bug-report", "feedback", "screenshot", "widget", "qa", "ai-agent", "claude-code", "codex", "annotation"],
   "license": "MIT",
-  "author": "The Bugframe authors",
+  "author": "vmatheus3",
+  "homepage": "https://github.com/vmatheus3/bug-frame#readme",
+  "repository": { "type": "git", "url": "git+https://github.com/vmatheus3/bug-frame.git" },
+  "bugs": { "url": "https://github.com/vmatheus3/bug-frame/issues" },
   "type": "module",
   "sideEffects": false,
   "engines": { "node": ">=18.17" },
@@ -20,7 +23,7 @@
     "./package.json": "./package.json"
   },
   "bin": { "bugframe": "./src/cli/bin.mjs" },
-  "files": ["dist", "src/server", "src/cli", "types", "prompts", "examples", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md"],
+  "files": ["dist", "src/server", "src/cli", "types", "prompts", "examples", "docs", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md"],
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
