@@ -1,6 +1,8 @@
 # Vue and Svelte
 
 The widget is framework-agnostic: call `init()` once on the client and `destroy()` on teardown.
+Mount it only for approved, signed-in users. Independently configure the server's `authorize` hook to verify the login session
+and reporting permission on every request; see [authentication](../authentication/README.md). Public widget tokens do not grant access.
 
 ## Vue 3
 
@@ -10,7 +12,7 @@ import { onMounted, onBeforeUnmount } from 'vue';
 import { init, type BugframeInstance } from 'bugframe';
 
 let bug: BugframeInstance | null = null;
-onMounted(() => { bug = init({ endpoint: '/api/bugframe', token: import.meta.env.VITE_BUGFRAME_TOKEN, metadata: () => ({ route: location.pathname }) }); });
+onMounted(() => { bug = init({ endpoint: '/api/bugframe', metadata: () => ({ route: location.pathname }) }); });
 onBeforeUnmount(() => bug?.destroy());
 </script>
 <template><span hidden /></template>
@@ -24,7 +26,7 @@ Or as a plugin in `main.ts`: `init({ ... })` right after `createApp(App).mount('
 <script lang="ts">
   import { onMount } from 'svelte';
   import { init } from 'bugframe';
-  onMount(() => { const bug = init({ endpoint: '/api/bugframe', token: import.meta.env.VITE_BUGFRAME_TOKEN }); return () => bug.destroy(); });
+  onMount(() => { const bug = init({ endpoint: '/api/bugframe' }); return () => bug.destroy(); });
 </script>
 ```
 

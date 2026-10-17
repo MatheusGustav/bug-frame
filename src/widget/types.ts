@@ -59,6 +59,7 @@ export type Strings = {
   sentBody: string;
   sentDownloaded: string;
   sendFailed: string;
+  accessDenied: string;
   downloadInstead: string;
   statusOpen: string;
   statusFixed: string;
@@ -70,7 +71,7 @@ export type Strings = {
 export type InitOptions = {
   /** Base URL of the report API (the server's `basePath`), e.g. "/api/bugframe". Omit it for download-only mode. */
   endpoint?: string;
-  /** Public client token, sent as `x-bugframe-token`. Not a secret: it only tells the server which project this is. */
+  /** Legacy public identifier sent as `x-bugframe-token`. Grants no access; use server-verified login sessions. */
   token?: string;
   /** Without an endpoint the report is downloaded as a .zip. Force it with `mode: 'download'`. */
   mode?: 'server' | 'download';
@@ -96,7 +97,7 @@ export type InitOptions = {
   captureConsole?: boolean;
   /** Called when a report is sent; return anything JSON-serialisable (app version, user id, current mode, ...). */
   metadata?: () => Record<string, unknown> | Promise<Record<string, unknown>>;
-  /** Identifies this person for "My reports". Default: a random id kept in localStorage. */
+  /** Legacy browser identifier. The server ignores this for ownership and uses the verified account id. */
   reporterId?: string | (() => string);
   /** Blank out `input`, `textarea` and `select` values in the pictures. Default true. */
   maskInputs?: boolean;

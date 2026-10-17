@@ -1,6 +1,6 @@
 // The report API as a plain fetch handler: (Request) => Promise<Response>. Works in Node 18+, Bun, Deno, Cloudflare Workers
 // (with a custom storage adapter) and behind any framework through the adapters in node.mjs.
-import { createHmac } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { createFileStorage } from './storage-fs.mjs';
 import { ID_RE, STATUSES, cleanContext, decodePng, newReportId, safeEqual, summarize, text } from './util.mjs';
 
@@ -19,7 +19,6 @@ export function createBugframe(options = {}) {
   const storage = o.storage ?? (o.dir ? createFileStorage({ dir: o.dir }) : null);
   if (!storage) throw new Error('createBugframe needs `dir` (filesystem) or a `storage` adapter');
   const basePath = (o.basePath ?? '').replace(/\/+$/, '');
-  const clientTokens = (o.clientTokens ?? []).filter(Boolean);
   const log = o.logger ?? (() => {});
   const rate = o.rateLimit === false ? null : { ...DEFAULTS.rateLimit, ...(o.rateLimit ?? {}) };
   const hits = new Map();
@@ -46,19 +45,24 @@ export function createBugframe(options = {}) {
     if (!origin || !allowedOrigin(origin, url)) return {};
     return { 'access-control-allow-origin': origin, vary: 'Origin', 'access-control-allow-methods': 'GET,POST,PATCH,OPTIONS', 'access-control-allow-headers': 'content-type,x-bugframe-token,x-bugframe-reporter,authorization', 'access-control-max-age': '600' };
   };
-  const role = async req => {
+  // Only a server-verified principal grants access. Public widget tokens and reporter headers never do.
+  const principal = async req => {
     const bearer = /^Bearer (.+)$/i.exec(req.headers.get('authorization') ?? '')?.[1];
-    if (o.adminToken && bearer && safeEqual(bearer, o.adminToken)) return 'admin';
-    if (o.authorize) { try { const r = await o.authorize(req); if (r === 'admin' || r === 'client') return r; if (r === true) return 'client'; } catch { /* a throwing hook means no access */ } return null; }
-    if (!clientTokens.length) return 'client';
-    const tok = req.headers.get('x-bugframe-token') ?? '';
-    return clientTokens.some(t => safeEqual(tok, t)) ? 'client' : null;
+    if (o.adminToken && bearer && safeEqual(bearer, o.adminToken)) return { role: 'admin', reporter: 'admin:token' };
+    if (o.authorize) {
+      try {
+        const p = await o.authorize(req);
+        if (p && typeof p === 'object' && (p.role === 'admin' || p.role === 'client') && typeof p.id === 'string' && p.id.trim() && p.id.length <= 256) {
+          return { role: p.role, reporter: `user:${createHash('sha256').update(p.id).digest('hex')}` };
+        }
+      } catch { /* unavailable or expired session verification means no access */ }
+    }
+    return null;
   };
-  const reporterOf = req => { const v = req.headers.get('x-bugframe-reporter') ?? ''; return /^[A-Za-z0-9_.-]{1,64}$/.test(v) ? v : 'anon'; };
   const clientIp = (req, ctx) => ctx?.ip || (o.trustProxy ? (req.headers.get('x-forwarded-for') ?? '').split(',')[0].trim() : '') || 'unknown';
 
   async function readJsonBody(req) {
-    if (!/json/i.test(req.headers.get('content-type') ?? '')) return { error: err(415, 'unsupported_media_type', 'Send application/json.') };
+    if (req.headers.get('content-type')?.split(';')[0].trim().toLowerCase() !== 'application/json') return { error: err(415, 'unsupported_media_type', 'Send application/json.') };
     const declared = Number(req.headers.get('content-length') ?? 0);
     if (declared > o.maxBodyBytes) return { error: err(413, 'too_large', 'The report is too large.') };
     if (!req.body) return { error: err(400, 'bad_json', 'Empty body.') };
@@ -84,8 +88,8 @@ export function createBugframe(options = {}) {
   }
 
   // ---- routes
-  async function create(req, ctx, url) {
-    if (limited(`${clientIp(req, ctx)}|${reporterOf(req)}`)) return err(429, 'rate_limited', 'Too many reports. Try again in a minute.', { 'retry-after': String(Math.ceil((rate?.windowMs ?? 60000) / 1000)) });
+  async function create(req, ctx, who) {
+    if (limited(`account:${who.reporter}`) || limited(`ip:${clientIp(req, ctx)}`)) return err(429, 'rate_limited', 'Too many reports. Try again in a minute.', { 'retry-after': String(Math.ceil((rate?.windowMs ?? 60000) / 1000)) });
     const { body, error } = await readJsonBody(req); if (error) return error;
     const b = body && typeof body === 'object' ? body : {};
     const description = text(b.description, o.maxDescription).trim();
@@ -95,7 +99,7 @@ export function createBugframe(options = {}) {
     let report;
     for (let attempt = 0; attempt < 5; attempt++) {
       const d = (o.now ?? (() => new Date()))(), id = (o.generateId ?? newReportId)(d);
-      report = { id, status: 'open', note: '', createdAt: d.toISOString(), reporter: reporterOf(req), description, types: (Array.isArray(b.types) ? b.types : []).slice(0, 8).map(t => text(t, 40)).filter(Boolean), context: cleanContext(b.context), files: { region: 'region.png', full: 'full.png' } };
+      report = { id, status: 'open', note: '', createdAt: d.toISOString(), reporter: who.reporter, description, types: (Array.isArray(b.types) ? b.types : []).slice(0, 8).map(t => text(t, 40)).filter(Boolean), context: cleanContext(b.context), files: { region: 'region.png', full: 'full.png' } };
       try { await storage.create(report, { region, full }); break; } catch (e) { if (e?.code === 'EXISTS' && attempt < 4) continue; log('store', String(e?.message ?? e)); return err(500, 'store_failed', 'The report could not be saved.'); }
     }
     try { await o.onReport?.(report); } catch (e) { log('onReport', String(e?.message ?? e)); }
@@ -104,9 +108,9 @@ export function createBugframe(options = {}) {
   }
 
   async function list(req, who, url) {
-    const all = who === 'admin' && url.searchParams.get('all') === '1';
-    if (o.publicList === false && who !== 'admin') return json(200, { reports: [] });
-    const reporter = reporterOf(req);
+    const all = who.role === 'admin' && url.searchParams.get('all') === '1';
+    if (o.publicList === false && who.role !== 'admin') return json(200, { reports: [] });
+    const reporter = who.reporter;
     const rows = (await storage.list()).filter(r => all || r.reporter === reporter);
     return json(200, { reports: rows.map(summarize) });
   }
@@ -114,10 +118,10 @@ export function createBugframe(options = {}) {
   async function image(req, who, id, file) {
     if (!ID_RE.test(id)) return err(404, 'not_found', 'Not found.');
     const r = await storage.get(id);
-    if (!r || (who !== 'admin' && r.reporter !== reporterOf(req))) return err(404, 'not_found', 'Not found.');
+    if (!r || (who.role !== 'admin' && r.reporter !== who.reporter)) return err(404, 'not_found', 'Not found.');
     const buf = await storage.readFile(id, file);
     if (!buf) return err(404, 'not_found', 'Not found.');
-    return new Response(buf, { status: 200, headers: { 'content-type': 'image/png', 'cache-control': 'private, max-age=300', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox", 'content-length': String(buf.length) } });
+    return new Response(buf, { status: 200, headers: { 'content-type': 'image/png', 'cache-control': 'no-store', 'x-content-type-options': 'nosniff', 'content-security-policy': "default-src 'none'; sandbox", 'content-length': String(buf.length) } });
   }
 
   async function patch(req, id) {
@@ -143,19 +147,19 @@ export function createBugframe(options = {}) {
       if (origin && !allowedOrigin(origin, url)) return err(403, 'origin_not_allowed', 'This origin is not allowed.');
       const path = url.pathname.slice(basePath.length);
       if (path === '/health') return withCors(json(200, { ok: true }));
-      const who = await role(req);
-      if (!who) return withCors(err(401, 'unauthorized', 'Missing or wrong token.'));
+      const who = await principal(req);
+      if (!who) return withCors(err(401, 'unauthorized', 'Sign in with an account authorized to report bugs.'));
       const parts = path.split('/').filter(Boolean); // ['reports', id?, file?]
       if (parts[0] === 'reports') {
-        if (parts.length === 1 && req.method === 'POST') return withCors(await create(req, ctx, url));
+        if (parts.length === 1 && req.method === 'POST') return withCors(await create(req, ctx, who));
         if (parts.length === 1 && req.method === 'GET') return withCors(await list(req, who, url));
         if (parts.length === 3 && req.method === 'GET' && (parts[2] === 'region.png' || parts[2] === 'full.png')) return withCors(await image(req, who, parts[1], parts[2]));
         if (parts.length === 2 && req.method === 'GET') {
-          if (who !== 'admin') return withCors(err(403, 'forbidden', 'Admin only.'));
+          if (who.role !== 'admin') return withCors(err(403, 'forbidden', 'Admin only.'));
           if (!ID_RE.test(parts[1])) return withCors(err(404, 'not_found', 'Not found.'));
           const r = await storage.get(parts[1]); return withCors(r ? json(200, r) : err(404, 'not_found', 'Not found.'));
         }
-        if (parts.length === 2 && req.method === 'PATCH') { if (who !== 'admin') return withCors(err(403, 'forbidden', 'Admin only.')); return withCors(await patch(req, parts[1])); }
+        if (parts.length === 2 && req.method === 'PATCH') { if (who.role !== 'admin') return withCors(err(403, 'forbidden', 'Admin only.')); return withCors(await patch(req, parts[1])); }
       }
       return withCors(err(405, 'method_not_allowed', 'Not supported.'));
     } catch (e) { log('handler', String(e?.stack ?? e)); return withCors(err(500, 'server_error', 'Something went wrong.')); }

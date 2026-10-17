@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
-import { readFile, access } from 'node:fs/promises';
+import { readFile, access, writeFile } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createBugframe } from '../../src/server/index.mjs';
@@ -11,7 +11,7 @@ import { body, cleanup, post, tmpDir } from '../helpers.mjs';
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '../../src/cli/bin.mjs');
 const run = (dir, ...args) => promisify(execFile)('node', [BIN, '--dir', dir, ...args]).then(r => r.stdout.trim(), e => { e.message = `${e.stderr}`; throw e; });
 const seed = async dir => {
-  const bf = createBugframe({ dir, rateLimit: false });
+  const bf = createBugframe({ dir, rateLimit: false, authorize: () => ({ id: 'cli-fixture', role: 'client' }) });
   const mk = async (description, url, extra = {}) => (await (await bf.handle(post('https://x.test/reports', body({ description, context: { ...body().context, url, ...extra } })))).json()).id;
   const a = await mk('Footer overlaps the button', 'https://app.test/settings#/billing');
   const b = await mk('Wrong total on invoice', 'https://app.test/invoices?id=4');
@@ -58,4 +58,15 @@ test('errors are plain and exit non-zero', async () => {
   assert.match(await run(dir, 'export'), /No open bug reports/);
   assert.match(await run(dir, '--help'), /Usage: bugframe/);
   await cleanup(dir);
+});
+
+test('serve refuses unconfigured authorization, public-token access and invalid auth modules', async () => {
+  const dir = await tmpDir();
+  try {
+    await assert.rejects(() => run(dir, 'serve'), /requires BUGFRAME_ADMIN_TOKEN or --auth-module/);
+    await assert.rejects(() => run(dir, 'serve', '--client-token', 'public'), /Public client tokens no longer authorize reporters/);
+    const module = join(dir, 'invalid-auth.mjs');
+    await writeFile(module, 'export const authorize = true;');
+    await assert.rejects(() => run(dir, 'serve', '--auth-module', module), /must export an authorize/);
+  } finally { await cleanup(dir); }
 });

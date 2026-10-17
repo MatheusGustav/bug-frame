@@ -12,6 +12,8 @@ export function BugReporter(props: InitOptions) {
 }
 
 // App.tsx
-//   <BugReporter endpoint="/api/bugframe" token={import.meta.env.VITE_BUGFRAME_TOKEN}
-//                metadata={() => ({ appVersion: __APP_VERSION__, userId: auth.user?.id })} />
-// Then open the app once with ?bugs=1.
+// Render this component only for a signed-in user with reporting permission:
+//   {auth.user?.canReportBugs && <BugReporter key={auth.user.id} endpoint="/api/bugframe"
+//                metadata={() => ({ appVersion: __APP_VERSION__ })} />}
+// The server's authorize hook must independently verify that permission on every request.
+// Same-origin session cookies are sent by fetch automatically. Then open the app with ?bugs=1.

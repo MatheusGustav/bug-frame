@@ -1,0 +1,17 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Sign in · Bugframe demo</title>
+  <style>body{font:16px system-ui,sans-serif;background:#f6f7fb;color:#14171f;margin:48px auto;padding:24px;max-width:440px}form{display:grid;gap:16px;padding:24px;background:white;border:1px solid #d5dbe6;border-radius:12px}input,button{font:inherit;padding:12px}button{background:#c2410c;color:white;border:0;border-radius:8px}label{display:grid;gap:8px}</style>
+</head>
+<body>
+  <h1>Approved tester sign-in</h1>
+  <p>This local demo prints a tester password in your terminal. Your website should use its existing login and reporting permissions.</p>
+  <form action="/login" method="post">
+    <label>Demo password <input name="password" type="password" autocomplete="current-password" required></label>
+    <button type="submit">Sign in</button>
+  </form>
+  <p><a href="/">View as an ordinary visitor</a></p>
+</body>
+</html>

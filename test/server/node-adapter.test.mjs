@@ -8,15 +8,16 @@ const listen = server => new Promise(res => server.listen(0, '127.0.0.1', () => 
 
 test('node http listener: create, list, close over real HTTP', async () => {
   const dir = await tmpDir();
-  const bf = createBugframe({ dir, adminToken: 'adm', rateLimit: false });
+  const bf = createBugframe({ dir, adminToken: 'adm', rateLimit: false, authorize: req => req.headers.get('authorization') === 'Bearer test-session' ? { id: 'me', role: 'client' } : null });
   const server = createServer(toNodeListener(bf)); const port = await listen(server);
   try {
     const base = `http://127.0.0.1:${port}`;
-    const res = await fetch(`${base}/reports`, { method: 'POST', headers: { 'content-type': 'application/json', 'x-bugframe-reporter': 'me' }, body: JSON.stringify(body()) });
+    assert.equal((await fetch(`${base}/reports`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body()) })).status, 401);
+    const res = await fetch(`${base}/reports`, { method: 'POST', headers: { 'content-type': 'application/json', authorization: 'Bearer test-session' }, body: JSON.stringify(body()) });
     assert.equal(res.status, 201); const { id } = await res.json();
-    const list = await (await fetch(`${base}/reports`, { headers: { 'x-bugframe-reporter': 'me' } })).json();
+    const list = await (await fetch(`${base}/reports`, { headers: { authorization: 'Bearer test-session' } })).json();
     assert.equal(list.reports[0].id, id);
-    const img = await fetch(`${base}/reports/${id}/region.png`, { headers: { 'x-bugframe-reporter': 'me' } });
+    const img = await fetch(`${base}/reports/${id}/region.png`, { headers: { authorization: 'Bearer test-session' } });
     assert.equal(img.status, 200); assert.equal((await img.arrayBuffer()).byteLength > 30, true);
     const closed = await fetch(`${base}/reports/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', authorization: 'Bearer adm' }, body: JSON.stringify({ status: 'fixed', note: 'done' }) });
     assert.equal(closed.status, 200);
@@ -25,7 +26,7 @@ test('node http listener: create, list, close over real HTTP', async () => {
 
 test('express-style mount: next() for foreign paths, basePath for ours, parsed bodies accepted', async () => {
   const dir = await tmpDir();
-  const bf = createBugframe({ dir, basePath: '/bugs', rateLimit: false });
+  const bf = createBugframe({ dir, basePath: '/bugs', rateLimit: false, authorize: () => ({ id: 'express-fixture', role: 'client' }) });
   const listener = toNodeListener(bf);
   const server = createServer((req, res) => {
     // emulate express: req.originalUrl keeps the prefix

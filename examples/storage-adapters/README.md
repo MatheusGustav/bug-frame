@@ -5,6 +5,7 @@ folders to disk. To keep reports somewhere else, implement five async methods an
 
 ```js
 import { createBugframe } from 'bugframe/server';
+import { authorize } from '../auth-module.mjs'; // see ../authentication/README.md
 
 const storage = {
   async create(report, { region, full }) {      // Buffers; throw an error with code 'EXISTS' if the id is taken
@@ -18,7 +19,9 @@ const storage = {
   async readFile(id, name) { /* name is 'region.png' or 'full.png'; return a Buffer or null */ },
 };
 
-export const bf = createBugframe({ storage, basePath: '/api/bugframe', clientTokens: ['...'], adminToken: '...' });
+// authorize must verify your application's login session and reporting permission.
+// See ../authentication/README.md. Without it only the admin credential can access reports.
+export const bf = createBugframe({ storage, basePath: '/api/bugframe', authorize, adminToken: process.env.BUGFRAME_ADMIN_TOKEN });
 ```
 
 - Validate nothing about ids yourself unless you build paths from them: the server only ever passes ids that match

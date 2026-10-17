@@ -127,6 +127,16 @@ describe('sending', () => {
     await toSheet({ endpoint: '/x', fetch: f as unknown as typeof fetch }); const ta = q<HTMLTextAreaElement>('textarea')!; ta.value = 'keep me'; ta.dispatchEvent(new Event('input')); q('.send')!.click(); await flush();
     expect(q('.error')!.textContent).toMatch(/could not be sent/); expect(q<HTMLTextAreaElement>('textarea')!.value).toBe('keep me'); expect(Array.from(shadow().querySelectorAll('.link')).pop()!.textContent).toMatch(/Download/);
   });
+  it.each([401, 403])('requires authorized sign-in on %s without offering a ZIP fallback', async status => {
+    const f = async (_u: string, options: RequestInit = {}) => options.method === 'POST' ? jsonRes({}, status) : jsonRes({ reports: [] });
+    await toSheet({ endpoint: '/api', fetch: f as unknown as typeof fetch });
+    const textarea = q<HTMLTextAreaElement>('textarea')!;
+    textarea.value = 'Keep my description'; textarea.dispatchEvent(new Event('input')); click('.send'); await flush();
+    expect(q('.error')!.textContent).toMatch(/Sign in with an account authorized/);
+    expect(q<HTMLTextAreaElement>('textarea')!.value).toBe('Keep my description');
+    expect(Array.from(shadow().querySelectorAll('button')).some(b => b.textContent?.includes('Download as a file'))).toBe(false);
+    expect(q('.sent')).toBeNull();
+  });
   it('download mode (no endpoint) saves a zip and never calls fetch', async () => {
     const created: Blob[] = []; (URL as unknown as { createObjectURL: (b: Blob) => string }).createObjectURL = b => { created.push(b); return 'blob:x'; }; (URL as unknown as { revokeObjectURL: () => void }).revokeObjectURL = () => {};
     const fetchMock = vi.fn(); const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {}); const onSent = vi.fn();

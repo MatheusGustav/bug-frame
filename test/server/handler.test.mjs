@@ -6,7 +6,8 @@ import { createBugframe, createMemoryStorage } from '../../src/server/index.mjs'
 import { body, cleanup, PNG_URL, post, tmpDir } from '../helpers.mjs';
 
 const U = 'https://app.test/api/bugframe';
-const fresh = async (opts = {}) => { const dir = await tmpDir(); const bf = createBugframe({ dir, basePath: '/api/bugframe', rateLimit: false, ...opts }); return { dir, bf, done: () => cleanup(dir) }; };
+// Non-auth tests run with an explicitly approved fixture account. Auth denial is covered in auth.test.mjs.
+const fresh = async (opts = {}) => { const dir = await tmpDir(); const bf = createBugframe({ dir, basePath: '/api/bugframe', rateLimit: false, authorize: () => ({ id: 'fixture-user', role: 'client' }), ...opts }); return { dir, bf, done: () => cleanup(dir) }; };
 const get = (url, headers = {}) => new Request(url, { headers });
 
 test('creates a report folder with report.json, region.png and full.png', async () => {
@@ -17,7 +18,7 @@ test('creates a report folder with report.json, region.png and full.png', async 
   assert.equal(status, 'open'); assert.match(id, /^bug-\d{8}-\d{6}-[a-f0-9]{4}$/);
   assert.deepEqual((await readdir(join(dir, id))).sort(), ['full.png', 'region.png', 'report.json']);
   const r = JSON.parse(await readFile(join(dir, id, 'report.json'), 'utf8'));
-  assert.equal(r.description, 'The save button overlaps the footer'); assert.equal(r.reporter, 'r1'); assert.equal(r.context.metadata.version, '1.2.3');
+  assert.equal(r.description, 'The save button overlaps the footer'); assert.match(r.reporter, /^user:[a-f0-9]{64}$/); assert.equal(r.context.metadata.version, '1.2.3');
   assert.equal((await readFile(join(dir, id, 'region.png'))).subarray(1, 4).toString(), 'PNG');
   await done();
 });
@@ -48,18 +49,22 @@ test('rejects images over maxImageBytes', async () => {
   await done();
 });
 
-test('client token is required when configured, compared safely', async () => {
-  const { bf, done } = await fresh({ clientTokens: ['pk_live_abc'] });
+test('public client tokens cannot replace verified account authorization', async () => {
+  const { bf, done } = await fresh({ clientTokens: ['pk_live_abc'], authorize: req => req.headers.get('authorization') === 'Bearer verified-session' ? { id: 'user', role: 'client' } : null });
   assert.equal((await bf.handle(post(`${U}/reports`, body()))).status, 401);
   assert.equal((await bf.handle(post(`${U}/reports`, body(), { 'x-bugframe-token': 'wrong' }))).status, 401);
-  assert.equal((await bf.handle(post(`${U}/reports`, body(), { 'x-bugframe-token': 'pk_live_abc' }))).status, 201);
+  assert.equal((await bf.handle(post(`${U}/reports`, body(), { 'x-bugframe-token': 'pk_live_abc' }))).status, 401);
+  assert.equal((await bf.handle(post(`${U}/reports`, body(), { authorization: 'Bearer verified-session' }))).status, 201);
   assert.equal((await bf.handle(get(`${U}/health`))).status, 200);
   await done();
 });
 
 test('admin routes need the admin token; clients only see their own reports', async () => {
-  const { bf, done } = await fresh({ clientTokens: ['pk'], adminToken: 'sk_admin' });
-  const h = who => ({ 'x-bugframe-token': 'pk', 'x-bugframe-reporter': who });
+  const { bf, done } = await fresh({ adminToken: 'sk_admin', authorize: req => {
+    const id = { 'Bearer session-a': 'a', 'Bearer session-b': 'b' }[req.headers.get('authorization')];
+    return id ? { id, role: 'client' } : null;
+  } });
+  const h = who => ({ authorization: `Bearer session-${who}`, 'x-bugframe-reporter': who });
   const a = (await (await bf.handle(post(`${U}/reports`, body({ description: 'from A' }), h('a')))).json()).id;
   const b = (await (await bf.handle(post(`${U}/reports`, body({ description: 'from B' }), h('b')))).json()).id;
   const mineA = await (await bf.handle(get(`${U}/reports`, h('a')))).json();
@@ -68,7 +73,7 @@ test('admin routes need the admin token; clients only see their own reports', as
   assert.equal((await bf.handle(get(`${U}/reports/${b}/region.png`, h('a')))).status, 404); // not theirs
   assert.equal((await bf.handle(get(`${U}/reports/${a}/region.png`, h('a')))).status, 200);
   assert.equal((await bf.handle(get(`${U}/reports/${a}`, h('a')))).status, 403);
-  const patchReq = (id, token, data) => new Request(`${U}/reports/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : { 'x-bugframe-token': 'pk' }) }, body: JSON.stringify(data) });
+  const patchReq = (id, token, data) => new Request(`${U}/reports/${id}`, { method: 'PATCH', headers: { 'content-type': 'application/json', ...(token ? { authorization: `Bearer ${token}` } : h('a')) }, body: JSON.stringify(data) });
   assert.equal((await bf.handle(patchReq(a, null, { status: 'fixed' }))).status, 403);
   assert.equal((await bf.handle(patchReq(a, 'nope', { status: 'fixed' }))).status, 401);
   assert.equal((await bf.handle(patchReq(a, 'sk_admin', { status: 'bad' }))).status, 400);
@@ -120,7 +125,7 @@ test('rate limit answers 429 with Retry-After', async () => {
   const send = () => bf.handle(post(`${U}/reports`, body()), { ip: '1.2.3.4' });
   assert.equal((await send()).status, 201); assert.equal((await send()).status, 201);
   const third = await send(); assert.equal(third.status, 429); assert.ok(third.headers.get('retry-after'));
-  assert.equal((await bf.handle(post(`${U}/reports`, body()), { ip: '9.9.9.9' })).status, 201); // another client is unaffected
+  assert.equal((await bf.handle(post(`${U}/reports`, body()), { ip: '9.9.9.9' })).status, 429); // same account cannot evade the limit by changing IP
   await done();
 });
 
@@ -156,16 +161,16 @@ test('a failing webhook never fails the report', async () => {
 
 test('custom authorize hook and onReport hook', async () => {
   const seen = [];
-  const { bf, done } = await fresh({ authorize: req => (req.headers.get('x-user') === 'ok' ? 'client' : false), onReport: r => seen.push(r.id) });
+  const { bf, done } = await fresh({ authorize: req => (req.headers.get('authorization') === 'Bearer session-ok' ? { id: 'approved-user', role: 'client' } : null), onReport: r => seen.push(r.id) });
   assert.equal((await bf.handle(post(`${U}/reports`, body()))).status, 401);
-  assert.equal((await bf.handle(post(`${U}/reports`, body(), { 'x-user': 'ok' }))).status, 201);
+  assert.equal((await bf.handle(post(`${U}/reports`, body(), { authorization: 'Bearer session-ok' }))).status, 201);
   assert.equal(seen.length, 1);
   await done();
 });
 
 test('works with a custom (memory) storage adapter and retries id collisions', async () => {
   const storage = createMemoryStorage(); let n = 0;
-  const bf = createBugframe({ storage, rateLimit: false, generateId: () => (n++ < 2 ? 'bug-20260101-000000-aaaa' : 'bug-20260101-000000-bbbb') });
+  const bf = createBugframe({ storage, rateLimit: false, authorize: () => ({ id: 'fixture-user', role: 'client' }), generateId: () => (n++ < 2 ? 'bug-20260101-000000-aaaa' : 'bug-20260101-000000-bbbb') });
   assert.equal((await bf.handle(post('https://x.test/reports', body()))).status, 201); // aaaa
   const second = await bf.handle(post('https://x.test/reports', body()));             // aaaa collides, retries -> bbbb
   assert.equal(second.status, 201); assert.equal((await second.json()).id, 'bug-20260101-000000-bbbb');

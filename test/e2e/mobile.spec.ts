@@ -1,6 +1,8 @@
 import { expect, test } from '@playwright/test';
+import { signIn } from './session';
 
 test('phone: the button sits clear of the chat bubble and inside the safe area, the sheet fits', async ({ page }) => {
+  await signIn(page);
   await page.goto('/?bugs=1');
   const fab = (await page.locator('.fab').boundingBox())!, chat = (await page.locator('#chat').boundingBox())!, vp = page.viewportSize()!;
   expect(fab.x + fab.width).toBeLessThanOrEqual(vp.width); expect(fab.y + fab.height).toBeLessThanOrEqual(vp.height);

@@ -2,6 +2,8 @@
 import { parseArgs } from 'node:util';
 import { readFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
+import { resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createBugframe } from '../server/handler.mjs';
 import { toNodeListener } from '../server/node.mjs';
 import { CliError, cmdClose, cmdExport, cmdImport, cmdList, cmdReopen, cmdShow } from './commands.mjs';
@@ -17,8 +19,9 @@ Commands:
   close <id> --note "..." [--status fixed|wontfix]
   reopen <id>
   import <report.zip>                  unpack a report downloaded from a backend-less page
-  serve [--port 4455] [--origin URL]... [--client-token T]... [--admin-token T] [--webhook URL] [--webhook-secret S]
-                                       run the reference server (set BUGFRAME_ADMIN_TOKEN instead of --admin-token to keep it out of shell history)
+  serve [--port 4455] [--origin URL]... [--auth-module FILE] [--admin-token T] [--webhook URL] [--webhook-secret S]
+                                       authorized sessions via a module exporting authorize(request), or admin-token access only
+                                       set BUGFRAME_ADMIN_TOKEN / BUGFRAME_AUTH_MODULE to keep config out of shell history
 
 Options:
   --dir <folder>   reports folder (env BUGFRAME_DIR, default ./bug-reports)
@@ -31,7 +34,7 @@ async function main(argv) {
     options: {
       dir: { type: 'string' }, open: { type: 'boolean' }, all: { type: 'boolean' }, json: { type: 'boolean' }, out: { type: 'string' }, note: { type: 'string' }, status: { type: 'string' },
       port: { type: 'string' }, host: { type: 'string' }, origin: { type: 'string', multiple: true }, 'client-token': { type: 'string', multiple: true }, 'admin-token': { type: 'string' }, webhook: { type: 'string' }, 'webhook-secret': { type: 'string' },
-      'base-path': { type: 'string' }, help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' },
+      'auth-module': { type: 'string' }, 'base-path': { type: 'string' }, help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' },
     },
   });
   const [cmd, arg] = positionals;
@@ -48,7 +51,16 @@ async function main(argv) {
     case 'import': return (await cmdImport(dir, need())).message;
     case 'serve': {
       const adminToken = values['admin-token'] ?? process.env.BUGFRAME_ADMIN_TOKEN;
-      const bf = createBugframe({ dir, basePath: values['base-path'] ?? '', clientTokens: values['client-token'] ?? (process.env.BUGFRAME_CLIENT_TOKEN ? [process.env.BUGFRAME_CLIENT_TOKEN] : []), adminToken, allowedOrigins: values.origin ?? [],
+      if (values['client-token'] || process.env.BUGFRAME_CLIENT_TOKEN) throw new CliError('Public client tokens no longer authorize reporters. Use --auth-module with verified login sessions.');
+      const authPath = values['auth-module'] ?? process.env.BUGFRAME_AUTH_MODULE;
+      let authorize;
+      if (authPath) {
+        const module = await import(pathToFileURL(resolve(authPath)).href);
+        if (typeof module.authorize !== 'function') throw new CliError('--auth-module must export an authorize(request) function');
+        authorize = module.authorize;
+      }
+      if (!adminToken && !authorize) throw new CliError('serve requires BUGFRAME_ADMIN_TOKEN or --auth-module. Anonymous reporting is disabled.');
+      const bf = createBugframe({ dir, basePath: values['base-path'] ?? '', authorize, adminToken, allowedOrigins: values.origin ?? [],
         webhook: values.webhook ? { url: values.webhook, secret: values['webhook-secret'] } : undefined, logger: (...a) => console.error('[bugframe]', ...a) });
       const port = Number(values.port ?? process.env.PORT ?? 4455), host = values.host ?? '127.0.0.1';
       await new Promise(res => createServer(toNodeListener(bf)).listen(port, host, res));

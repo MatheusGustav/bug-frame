@@ -16,6 +16,7 @@
 </head>
 <body>
   <main>
+    <!-- BUGFRAME_SESSION -->
     <section class="card" data-component="invoice-summary">
       <h1>Invoice #4021</h1>
       <p>Total due: <span id="total">$1,240.00</span></p>
@@ -36,13 +37,13 @@
   <script>
     document.getElementById('boom').addEventListener('click', function () { console.error('Demo error: total could not be loaded'); });
   </script>
-  <script src="/bugframe.min.js" data-autoinit data-endpoint="/api/bugframe" data-token="demo-public-token" data-avoid="#chat" data-capture-console="true"></script>
+  <!-- BUGFRAME_WIDGET -->
 
   <!-- 2) The same thing with full control:
   <script src="/bugframe.min.js"></script>
   <script>
     Bugframe.init({
-      endpoint: '/api/bugframe', token: 'demo-public-token', position: 'bottom-right', avoid: ['#chat'],
+      endpoint: '/api/bugframe', position: 'bottom-right', avoid: ['#chat'],
       types: ['Wrong layout', 'Missing', 'Wrong data', 'Broken', 'Text'], captureConsole: true,
       metadata: function () { return { appVersion: '1.4.2', plan: 'pro' }; },
     });

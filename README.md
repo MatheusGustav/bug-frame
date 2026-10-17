@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/vmatheus3/bug-frame/actions/workflows/ci.yml/badge.svg)](https://github.com/vmatheus3/bug-frame/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-c2410c.svg)](LICENSE)
-[![Download](https://img.shields.io/badge/download-v0.1.1-c2410c.svg)](https://github.com/vmatheus3/bug-frame/releases/tag/v0.1.1)
+[![Download](https://img.shields.io/badge/download-v0.2.0-c2410c.svg)](https://github.com/vmatheus3/bug-frame/releases/tag/v0.2.0)
 
 ![Bugframe: frame the bug and send the context](docs/images/bugframe-overview.png)
 
@@ -44,7 +44,7 @@ The runnable demo below uses the actual widget. Image files and the final genera
 - **AI agents fix many small bugs very well, in one batch.** Give them the grouped work list, the pictures and a good prompt
   (`prompts/FIX_BUGS.md`) and they find the root causes, fix them together, prove each fix with a before/after picture and
   write a plain-language answer back to the reporter.
-- **It disappears when you don't need it.** It is off unless switched on (`?bugs=1`), so customers never see it.
+- **Approved users only.** Reporting requires a server-verified login and reporting permission. `?bugs=1` only controls visibility; ordinary visitors cannot authorize themselves.
 
 ## 5-minute quick start
 
@@ -58,8 +58,9 @@ npm run build
 npm run example
 ```
 
-Open <http://127.0.0.1:4455/?bugs=1>. The invoice total is wrong on purpose: report it, then try **My reports**.
-The demo stores reports in `examples/plain-html/reports/` and uses demonstration tokens; configure your own when integrating it.
+Open <http://127.0.0.1:4455/?bugs=1> and follow **Sign in as an approved tester**. The terminal prints a random demo password.
+Once signed in, report the deliberately wrong invoice total, then try **My reports**. Signing out revokes the session.
+Reports are stored in `examples/plain-html/reports/`. This localhost demo uses an HttpOnly session cookie; integrate your own website login in production.
 In another terminal in the repository:
 
 ```bash
@@ -70,12 +71,13 @@ node src/cli/bin.mjs --dir ./examples/plain-html/reports close <id> --note "Fixe
 
 ### Add it to your own project
 
-Install the built package from the [GitHub release](https://github.com/vmatheus3/bug-frame/releases/tag/v0.1.1).
+Install the built package from the [GitHub release](https://github.com/vmatheus3/bug-frame/releases/tag/v0.2.0).
 This installation does not depend on a package named `bugframe` being published to the npm registry:
 
 ```bash
-npm install https://github.com/vmatheus3/bug-frame/releases/download/v0.1.1/bugframe-0.1.1.tgz
-npx bugframe serve --dir ./bug-reports --port 4455 --client-token demo --admin-token change-me
+npm install https://github.com/vmatheus3/bug-frame/releases/download/v0.2.0/bugframe-0.2.0.tgz
+# First connect your server-side login verifier as described under "Access control" below.
+npx bugframe serve --dir ./bug-reports --port 4455 --auth-module ./bugframe-auth.mjs
 ```
 
 For a script tag, download `bugframe.min.js` from the same release and serve it from your site's `/vendor/` directory.
@@ -83,13 +85,14 @@ Add the widget to any page (script tag, no build step):
 
 ```html
 <script src="/vendor/bugframe.min.js"
-        data-endpoint="http://localhost:4455" data-token="demo"></script>
+        data-endpoint="/api/bugframe"></script>
 ```
 
 > The standalone `serve` command answers at its root; if your page is on another origin add `--origin http://localhost:3000`
 > so the browser is allowed to call it.
 
-Open your page with `?bugs=1`. A bug button appears (and stays, until `?bugs=0`). Click it, choose "Report a problem on this
+Only load the widget for signed-in users with reporting permission, and verify that permission on the API.
+For an approved user, open the page with `?bugs=1`. A bug button appears (and stays, until `?bugs=0`). Click it, choose "Report a problem on this
 page", drag a box, describe it, send. Then:
 
 ```bash
@@ -107,7 +110,7 @@ The release includes the standalone browser bundle, an installable package with 
 
 | Stack | How |
 | --- | --- |
-| Any HTML page, WordPress, Webflow, Shopify, static sites | `<script src=".../bugframe.min.js" data-endpoint="..." data-token="...">` |
+| Any HTML page, WordPress, Webflow, Shopify, static sites | Load the script for approved users and connect a session-authorized endpoint (or use local ZIP download mode). |
 | React / Preact / Next.js | `useEffect(() => { const b = init({...}); return () => b.destroy(); }, [])` - [examples/react](examples/react), [examples/nextjs](examples/nextjs) |
 | Vue / Nuxt / Svelte / SvelteKit / Angular | call `init()` on mount - [examples/vue-svelte](examples/vue-svelte) |
 | Server: Node http, Express, Fastify, Connect | `toNodeListener(bf)` / `expressMiddleware(bf)` - [examples/express](examples/express) |
@@ -119,11 +122,41 @@ import { init } from 'bugframe';
 
 const bugframe = init({
   endpoint: '/api/bugframe',
-  token: 'pk_public_token',
   metadata: () => ({ appVersion: APP_VERSION, userId: user?.id, mode: currentMode }),
   captureConsole: true,
 });
 ```
+
+## Access control (required for server mode)
+
+**Visitors and ordinary customer accounts cannot submit reports.** The API is closed by default. Configure `authorize`
+to verify the website's login session and check an explicit reporting permission or admin role. The server calls it on
+**every** report request, including lists and screenshots. Missing, expired, revoked, denied, or unverifiable sessions get HTTP 401.
+
+```js
+// bugframe-auth.mjs — runs only on the server
+import { verifySession } from './your-app/auth.mjs'; // your existing login/session service
+
+export async function authorize(request) {
+  const session = await verifySession(request); // verifies signature/session storage, expiry and revocation
+  const user = session?.user;
+  if (!user || user.disabled) return null;
+  if (user.role === 'admin') return { id: String(user.id), role: 'admin' };
+  if (user.canReportBugs === true) return { id: String(user.id), role: 'client' };
+  return null; // being signed in alone is insufficient
+}
+```
+
+Pass this function to `createBugframe({ dir, authorize })`, or load it with `bugframe serve --auth-module ./bugframe-auth.mjs`.
+`verifySession` belongs to your application; Bugframe does not invent or auto-approve user accounts. Keep the endpoint on
+the same origin to use existing HttpOnly session cookies. Never trust a browser-provided role, user id, or unsigned cookie.
+
+`?bugs=1` is only a display preference. Copying the widget token or changing localStorage/reporter ids does not bypass the
+API. Ownership and account rate limits come from the verified identity. Admin bearer credentials are only for server-side
+operations. No `authorize` configuration means browser reporting remains denied.
+
+See [authentication examples and the 0.1.x migration guide](examples/authentication/README.md). Upgrade the server and widget
+together; existing reports with browser-generated ownership ids remain accessible to admins and the local CLI.
 
 ## Configuration reference (widget)
 
@@ -134,7 +167,7 @@ For the script tag, options map to `data-*` attributes (`data-endpoint`, `data-t
 | Option | Default | What it does |
 | --- | --- | --- |
 | `endpoint` | none | Base URL of the report API. Without it the widget runs in download mode. |
-| `token` | none | Public client token, sent as `x-bugframe-token`. |
+| `token` | none | Legacy public widget identifier (`x-bugframe-token`); grants no access. Use verified login sessions on the server. |
 | `mode` | auto | `'server'` or `'download'`. |
 | `enable` | `'query'` | `'query'` (`?bugs=1` on, `?bugs=0` off, remembered in localStorage), `'storage'` (only the stored flag), `'always'`, `'never'`, a boolean or a function `() => boolean` (for example "only for staff"). |
 | `enableParam`, `storageKey` | `'bugs'`, `'bugframe:enabled'` | Names for the query parameter and storage key. |
@@ -146,7 +179,7 @@ For the script tag, options map to `data-*` attributes (`data-endpoint`, `data-t
 | `strings`, `locale` | `'auto'` | Replace any text; built-in `en`, `es`, `pt`. |
 | `captureConsole` | `false` | Record console errors and uncaught exceptions of the last minute (opt-in). |
 | `metadata` | none | `() => object` (sync or async) merged into every report: app version, user id, current mode, feature flags. Max 8 KB. |
-| `reporterId` | random id in localStorage | Who "My reports" belongs to. Pass your user id to follow people across devices. |
+| `reporterId` | random id in localStorage | Legacy browser identifier. The server ignores it for ownership and uses the verified account id. |
 | `maskInputs` | `true` | Paint over every `input`, `textarea`, `select`, contenteditable in the pictures. |
 | `mask` | `[]` | More selectors to paint over. `[data-bug-mask]` and password fields are always masked. |
 | `exclude` | `[]` | Selectors left out of the picture entirely. |
@@ -163,7 +196,7 @@ For the script tag, options map to `data-*` attributes (`data-endpoint`, `data-t
 
 ```json
 {
-  "id": "bug-20261017-153012-9f3a", "status": "open", "note": "", "createdAt": "2026-10-17T15:30:12.000Z", "reporter": "r1f2e...",
+  "id": "bug-20261017-153012-9f3a", "status": "open", "note": "", "createdAt": "2026-10-17T15:30:12.000Z", "reporter": "user:<sha256 of verified account id>",
   "description": "The total is wrong, it should be $1,420.00", "types": ["Wrong data"],
   "context": {
     "url": "https://app.example.com/invoices/4021?tab=summary", "title": "Invoice 4021",
@@ -184,11 +217,12 @@ the box, which tells an agent which code to open.
 ```js
 import { createBugframe, toNodeListener } from 'bugframe/server';
 import { createServer } from 'node:http';
+import { authorize } from './bugframe-auth.mjs';
 
 const bf = createBugframe({
   dir: './bug-reports',                    // or storage: myAdapter
   basePath: '/api/bugframe',
-  clientTokens: [process.env.BUGFRAME_CLIENT_TOKEN],
+  authorize, // your server-side session verifier; see Access control above
   adminToken: process.env.BUGFRAME_ADMIN_TOKEN,
   allowedOrigins: ['https://www.example.com'],
 });
@@ -199,12 +233,12 @@ createServer(toNodeListener(bf)).listen(4455);
 | --- | --- | --- |
 | `dir` / `storage` | required (one of) | Built-in folder storage, or your own adapter. |
 | `basePath` | `''` | URL prefix the API is mounted under (must match your mount). |
-| `clientTokens` | `[]` | Accepted public tokens. Empty = no token needed (use rate limits and origins). |
+| `clientTokens` | deprecated | Ignored for authorization. Public widget tokens never grant access. |
 | `adminToken` | none | `Authorization: Bearer ...`: list everyone's reports, read full reports, close. |
-| `authorize` | none | `(req) => 'admin' \| 'client' \| false`: plug in your own auth (sessions, JWT). Replaces tokens. |
-| `allowedOrigins` | none | Cross-site browser origins allowed (`['https://a.com']`, `'*'` or a function). Same-origin always works. |
+| `authorize` | deny | Verify login and reporting permission; return `{ id, role: 'client' }` or `{ id, role: 'admin' }`, otherwise `null`. |
+| `allowedOrigins` | none | Cross-site browser origins allowed. Origin approval does not bypass login authorization; prefer a same-origin session API. |
 | `maxBodyBytes`, `maxImageBytes`, `maxDescription` | 24 MB, 10 MB, 4000 | Hard limits (413 / 400). |
-| `rateLimit` | 10 / minute | Per client IP + reporter id; `false` disables. 429 with `Retry-After`. |
+| `rateLimit` | 10 / minute | Separate limits for verified account and IP. In-memory per instance; `false` disables. 429 with `Retry-After`. |
 | `trustProxy` | `false` | Read the IP from `X-Forwarded-For` (only behind a proxy you control). |
 | `publicList` | `true` | `false`: clients see no "My reports". |
 | `webhook` | none | `{ url, secret, includeImages }`: POST `report.created` with `x-bugframe-signature: sha256=<hmac>`. Failures never fail a report. |
@@ -215,7 +249,7 @@ HTTP routes (relative to `basePath`):
 | Route | Who | |
 | --- | --- | --- |
 | `POST /reports` | client | JSON `{ description, types, context, region, full }` with PNG data URLs. `201 { id, status }`. |
-| `GET /reports` | client | The reporter's own reports (`x-bugframe-reporter` header). Admin: `?all=1`. |
+| `GET /reports` | approved account | Only reports belonging to the verified account. Admin: `?all=1`. |
 | `GET /reports/:id/region.png`, `/full.png` | client (own) / admin | The pictures. |
 | `GET /reports/:id` | admin | Full report. |
 | `PATCH /reports/:id` | admin | `{ status: 'open'\|'fixed'\|'wontfix', note }`. |
@@ -230,11 +264,12 @@ bugframe [--dir ./bug-reports] <command>
   list [--open] [--json]            show [id] [--json]
   export [--all] [--out FILE]       close <id> --note "..." [--status fixed|wontfix]
   reopen <id>                       import <report.zip>
-  serve [--port 4455] [--origin URL]... [--client-token T]... [--admin-token T] [--webhook URL]
+  serve [--port 4455] [--origin URL]... [--auth-module FILE] [--admin-token T] [--webhook URL]
 ```
 
-`--dir` can also come from `BUGFRAME_DIR`. `serve` reads `BUGFRAME_ADMIN_TOKEN` and `BUGFRAME_CLIENT_TOKEN` so secrets stay out of
-shell history. `close` writes the note to `report.json`; the server reads it, so the reporter sees it in "My reports".
+`--dir` can also come from `BUGFRAME_DIR`. `serve` reads `BUGFRAME_ADMIN_TOKEN` and `BUGFRAME_AUTH_MODULE`.
+An auth module exports `authorize(request)` and verifies your existing login. Without a module, only the admin credential is accepted.
+Startup requires at least one of those settings; public `--client-token` access has been removed. `close` writes the note to `report.json`; the server reads it, so the reporter sees it in "My reports".
 
 ## The workflow with an AI coding agent
 
@@ -253,8 +288,8 @@ shell history. `close` writes the note to `report.json`; the server reads it, so
   **in the image** before it is sent. Use `exclude` for things that should not even be in the layout (chat widgets).
 - Console capture is **off** by default; URLs have secret-looking parameters redacted; metadata is only what you return.
 - Nothing is sent anywhere except your endpoint. No analytics, no third-party services.
-- The client token is public. Protect the endpoint with `allowedOrigins`, rate limits, size limits and (for private tools) the
-  `authorize` hook. The admin token never belongs in a browser.
+- All report routes require an approved account or admin credential. `authorize` verifies login and reporting permission on every request.
+  URL flags, public tokens, and browser reporter ids never grant access. The admin token never belongs in a browser.
 - Server hardening: ids are validated against one exact pattern before touching the filesystem, only three file names exist,
   uploads must be real PNGs (signature + header), images are served `nosniff` with a locked CSP, tokens are compared in constant
   time, bodies are size-limited while streaming.
@@ -277,9 +312,9 @@ element positions at capture time; content that moves during capture can leave a
 **Does it work on phones?** Yes: touch drag, 44px targets, safe-area insets, 16px inputs (no iOS zoom), the sheet rises above
 the keyboard.
 
-**Can reporters see each other's reports?** No. "My reports" lists only the reports from the same reporter id. Admins see all.
+**Can reporters see each other's reports?** The server restricts lists and screenshots to the verified account, even if a caller forges a reporter header. Admins can see all. Destroy the widget when switching accounts to discard previews already loaded in the browser.
 
-**Can I keep it on in production?** Yes, with `enable: () => user.isStaff` or a feature flag. Remember the endpoint is public-facing.
+**Can I keep it on in production?** Configure the server's `authorize` hook to verify approved login sessions, then load the widget only for those accounts. UI visibility is a convenience; the API enforces access.
 
 **Where do reports live?** In `bug-reports/<id>/`. Back that folder up like any data. Use a storage adapter for serverless hosts.
 

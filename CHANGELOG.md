@@ -3,6 +3,19 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/) and the project
 uses [Semantic Versioning](https://semver.org/).
 
+## [0.2.0] - 2026-10-17
+
+### Security / breaking changes
+- Close all report APIs by default. Require a server-verified `{ id, role }` principal or admin credential; public widget
+  tokens and legacy string/boolean authorization results no longer grant access.
+- Derive report ownership from verified account identity and apply separate account/IP rate limits. Browser reporter ids
+  cannot claim another account's reports or reset the account quota. Require JSON content type and disable screenshot caching.
+- Add a local sign-in demo with expiring HttpOnly sessions and server-side logout/revocation; include session integration
+  and migration guidance for existing websites. The CLI supports `--auth-module` and rejects public-token configurations.
+- Explain denied access in English, Spanish, and Portuguese, keep descriptions for retry, and suppress ZIP fallback on 401/403.
+- Add regression coverage for unauthenticated/unauthorized access, forged identities, revocation, ownership isolation,
+  account/IP limits, strict content types, and real browser sign-in/logout.
+
 ## [0.1.1] - 2026-10-17
 
 ### Fixed

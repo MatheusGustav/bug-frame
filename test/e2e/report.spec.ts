@@ -3,12 +3,14 @@ import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readdirSync, readFileSync, rmSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { signIn } from './session';
 
 const DIR = '.e2e-reports';
 const CLI = (...args: string[]) => execFileSync('node', ['src/cli/bin.mjs', ...args], { encoding: 'utf8' }).trim();
 const pngSize = (file: string) => { const b = readFileSync(file); return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) }; };
 
 test.beforeAll(() => rmSync(DIR, { recursive: true, force: true }));
+test.beforeEach(async ({ page }) => signIn(page));
 
 async function openMenu(page: Page) {
   await page.goto('/?bugs=1');

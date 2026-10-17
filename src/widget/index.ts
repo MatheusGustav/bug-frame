@@ -54,6 +54,7 @@ class Bugframe implements BugframeInstance {
   private rect: Rect | null = null;
   private hint = '';
   private error = '';
+  private accessDenied = false;
   private full = '';
   private region = '';
   private text = '';
@@ -185,14 +186,19 @@ class Bugframe implements BugframeInstance {
   }
   private async send() {
     if (!this.text.trim() || !this.rect) return;
-    this.error = ''; this.go('sending');
+    this.error = ''; this.accessDenied = false; this.go('sending');
     try {
       const payload = await this.buildReport();
       if (this.api) {
         const res = await sendReport(this.api, payload);
         this.finishSent(res.id, false); void this.loadReports();
       } else { this.download(payload); }
-    } catch (e) { this.fail(e); this.error = this.t.sendFailed + (e instanceof ApiError && e.status === 401 ? ' (401)' : ''); this.go('sheet'); }
+    } catch (e) {
+      this.fail(e);
+      this.accessDenied = e instanceof ApiError && (e.status === 401 || e.status === 403);
+      this.error = this.accessDenied ? this.t.accessDenied : this.t.sendFailed;
+      this.go('sheet');
+    }
   }
   private download(payload: Awaited<ReturnType<Bugframe['buildReport']>>) {
     const id = newId(), enc = new TextEncoder();
@@ -363,7 +369,7 @@ class Bugframe implements BugframeInstance {
     }
     if (this.error) {
       sheet.append(h('p', { class: 'error', role: 'alert' }, this.error));
-      if (this.api) { const dl = h('button', { type: 'button', class: 'link' }, t.downloadInstead); dl.addEventListener('click', () => void this.buildReport().then(p => this.download(p))); sheet.append(dl); }
+      if (this.api && !this.accessDenied) { const dl = h('button', { type: 'button', class: 'link' }, t.downloadInstead); dl.addEventListener('click', () => void this.buildReport().then(p => this.download(p))); sheet.append(dl); }
     }
     sendBtn.addEventListener('click', () => void this.send()); sync();
     sheet.append(sendBtn);

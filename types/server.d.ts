@@ -35,6 +35,13 @@ export interface StorageAdapter {
   readFile(id: string, name: 'region.png' | 'full.png'): Promise<Buffer | null>;
 }
 
+/** Identity obtained by verifying a session/token and checking reporting permission on the server. */
+export interface BugframePrincipal {
+  /** Stable, nonempty account id (up to 256 characters); include tenant id for multi-tenant apps. */
+  id: string;
+  role: 'client' | 'admin';
+}
+
 export interface BugframeOptions {
   /** Folder for the built-in filesystem storage. */
   dir?: string;
@@ -42,18 +49,21 @@ export interface BugframeOptions {
   storage?: StorageAdapter;
   /** URL prefix this API is mounted under, e.g. "/api/bugframe". Default "". */
   basePath?: string;
-  /** Public tokens the widget sends as `x-bugframe-token`. Empty = no client token required. */
+  /** @deprecated Public widget tokens no longer grant access. Configure authorize instead. */
   clientTokens?: string[];
   /** Secret for the CLI/ops: `Authorization: Bearer <adminToken>` can list everything and close reports. */
   adminToken?: string;
-  /** Custom auth. Return 'admin', 'client', true (client) or anything falsy to refuse. Replaces client tokens. */
-  authorize?: (req: Request) => Promise<'admin' | 'client' | boolean | null | undefined> | 'admin' | 'client' | boolean | null | undefined;
+  /** Verify the request's login session AND reporting permission. No hook means admin-token access only.
+   * Return a principal for an approved user/admin; return null/false for everyone else. Called on every request.
+   * Never trust an unsigned cookie, a user-id header, widget metadata or a client-supplied role.
+   */
+  authorize?: (req: Request) => Promise<BugframePrincipal | false | null | undefined> | BugframePrincipal | false | null | undefined;
   /** Browser origins allowed to call the API cross-site. Same-origin always works. Default: none. */
   allowedOrigins?: string[] | '*' | ((origin: string) => boolean);
   maxBodyBytes?: number;
   maxImageBytes?: number;
   maxDescription?: number;
-  /** POST /reports limit per IP+reporter. `false` turns it off. Default 10 per minute. */
+  /** POST /reports limits independently per verified account and per IP. In-memory, per instance. Default 10/minute. */
   rateLimit?: false | { max?: number; windowMs?: number };
   /** Read the client IP from X-Forwarded-For (only behind a proxy you control). */
   trustProxy?: boolean;
