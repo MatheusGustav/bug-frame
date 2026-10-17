@@ -148,6 +148,18 @@ describe('sending', () => {
 });
 
 describe('my reports', () => {
+  it('keeps the report button and menu actions mounted while background reports arrive', async () => {
+    let finish: (response: Response) => void = () => {};
+    const fetchMock = () => new Promise<Response>(resolve => { finish = resolve; });
+    make({ endpoint: '/api', fetch: fetchMock as typeof fetch });
+    const fab = q('.fab')!;
+    finish(jsonRes({ reports: [] })); await flush();
+    expect(q('.fab')).toBe(fab);
+    fab.click(); const action = q('.menu .main')!;
+    finish(jsonRes({ reports: [] })); await flush();
+    expect(q('.menu .main')).toBe(action);
+    action.click(); await flush(); expect(q('.layer')).toBeTruthy();
+  });
   it('lists status and fix note, counts open ones, and offers turning the tool off', async () => {
     const reports = [
       { id: 'bug-20260101-000001-aaaa', status: 'open', note: '', createdAt: '2026-01-01', description: 'Button cut off', types: [], page: '/a' },

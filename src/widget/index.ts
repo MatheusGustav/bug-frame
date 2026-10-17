@@ -141,14 +141,29 @@ class Bugframe implements BugframeInstance {
   // ---- data
   private async loadReports() {
     if (!this.api) return;
-    try { this.reports = await listReports(this.api); this.render(); void this.loadThumbs(); } catch { /* the list is a convenience */ }
+    try {
+      this.reports = await listReports(this.api);
+      // Preserve the button and menu actions: a late response must not remove a target mid-tap.
+      const fab = this.root?.querySelector('.fab');
+      fab?.querySelector('.count')?.remove();
+      const open = this.reports.filter(r => r.status === 'open').length;
+      if (fab && open > 0 && this.phase === 'idle') fab.append(h('b', { class: 'count', 'aria-label': this.t.openCount.replace('{n}', String(open)) }, String(open)));
+      const list = this.root?.querySelector('.menu .list');
+      const updated = list ? this.renderMenu().querySelector('.list') : null;
+      if (updated) list?.replaceWith(updated);
+      void this.loadThumbs();
+    } catch { /* the list is a convenience */ }
   }
   private async loadThumbs() {
     if (!this.api) return;
     for (const r of (this.reports ?? []).slice(0, 12)) {
       if (this.thumbs.has(r.id)) continue;
       const url = await fetchThumb(this.api, r.id);
-      if (url) { this.thumbs.set(r.id, url); if (this.menu) this.render(); }
+      if (url) {
+        this.thumbs.set(r.id, url);
+        const image = Array.from(this.root?.querySelectorAll<HTMLImageElement>('.thumb') ?? []).find(img => img.dataset.reportId === r.id);
+        if (image) image.src = url;
+      }
     }
   }
 
@@ -273,7 +288,7 @@ class Bugframe implements BugframeInstance {
         const label: Record<ReportStatus, string> = { open: t.statusOpen, fixed: t.statusFixed, wontfix: t.statusWontfix };
         for (const r of this.reports.slice(0, 12)) {
           const thumb = this.thumbs.get(r.id);
-          const li = h('li', {}, h('img', { class: 'thumb', alt: '', src: thumb, loading: 'lazy' }),
+          const li = h('li', {}, h('img', { class: 'thumb', alt: '', src: thumb, loading: 'lazy', 'data-report-id': r.id }),
             h('span', {}, h('strong', {}, r.description), h('small', {}, h('i', { class: `status is-${r.status}` }, label[r.status] ?? r.status), r.page ? ` · ${r.page}` : ''), r.note ? h('small', {}, r.note) : null));
           ul.append(li);
         }

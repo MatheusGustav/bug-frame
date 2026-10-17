@@ -13,6 +13,7 @@ uses [Semantic Versioning](https://semver.org/).
 - Add a local sign-in demo with expiring HttpOnly sessions and server-side logout/revocation; include session integration
   and migration guidance for existing websites. The CLI supports `--auth-module` and rejects public-token configurations.
 - Explain denied access in English, Spanish, and Portuguese, keep descriptions for retry, and suppress ZIP fallback on 401/403.
+- Preserve report-button and menu-action DOM nodes during background report refreshes so taps are not lost on mobile.
 - Add regression coverage for unauthenticated/unauthorized access, forged identities, revocation, ownership isolation,
   account/IP limits, strict content types, and real browser sign-in/logout.
 
