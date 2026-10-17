@@ -1,0 +1,118 @@
+import { expect, test, type Page } from '@playwright/test';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, existsSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+const DIR = '.e2e-reports';
+const CLI = (...args: string[]) => execFileSync('node', ['src/cli/bin.mjs', ...args], { encoding: 'utf8' }).trim();
+const pngSize = (file: string) => { const b = readFileSync(file); return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) }; };
+
+test.beforeAll(() => rmSync(DIR, { recursive: true, force: true }));
+
+async function openMenu(page: Page) {
+  await page.goto('/?bugs=1');
+  await page.locator('.fab').click();
+}
+async function dragOver(page: Page, selector: string) {
+  const box = (await page.locator(selector).boundingBox())!;
+  const x0 = box.x - 8, y0 = box.y - 8, x1 = box.x + box.width + 8, y1 = box.y + box.height + 8;
+  await page.mouse.move(x0, y0); await page.mouse.down(); await page.mouse.move((x0 + x1) / 2, (y0 + y1) / 2, { steps: 5 }); await page.mouse.move(x1, y1, { steps: 5 }); await page.mouse.up();
+}
+
+test('drag a box, describe, send: the report lands on disk and the CLI exports it', async ({ page }) => {
+  await openMenu(page);
+  await page.getByRole('menuitem', { name: /Report a problem on this page/ }).click();
+  await expect(page.locator('.layer')).toBeVisible({ timeout: 20_000 });
+  await page.evaluate(() => console.error('Demo error before report'));
+  await dragOver(page, '#total');
+  await expect(page.locator('.sheet')).toBeVisible();
+  await expect(page.locator('.preview')).toHaveAttribute('src', /^data:image\/png/);
+  await page.locator('textarea').fill('The total is wrong, it should be $1,420.00');
+  await page.locator('.chips button', { hasText: 'Wrong data' }).click();
+  const [request] = await Promise.all([page.waitForRequest(r => r.url().endsWith('/api/bugframe/reports') && r.method() === 'POST'), page.locator('.send').click()]);
+  await expect(page.locator('.sent')).toBeVisible();
+
+  // The pictures: masked fields are painted over in the full screenshot, the region is smaller than the full page picture.
+  const body = JSON.parse(request.postData()!);
+  const pixel = await page.evaluate(async ({ full, sel }) => {
+    const img = new Image(); img.src = full; await img.decode();
+    const el = document.querySelector(sel)!.getBoundingClientRect(), s = img.naturalWidth / window.innerWidth;
+    const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const ctx = c.getContext('2d')!; ctx.drawImage(img, 0, 0);
+    return Array.from(ctx.getImageData(Math.round((el.left + 6) * s), Math.round((el.top + el.height / 2) * s), 1, 1).data);
+  }, { full: body.full as string, sel: '#password' });
+  expect(pixel.slice(0, 3)).toEqual([58, 63, 75]);
+  const acct = await page.evaluate(async ({ full, sel }) => {
+    const img = new Image(); img.src = full; await img.decode();
+    const el = document.querySelector(sel)!.getBoundingClientRect(), s = img.naturalWidth / window.innerWidth;
+    const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight; const ctx = c.getContext('2d')!; ctx.drawImage(img, 0, 0);
+    return Array.from(ctx.getImageData(Math.round((el.left + 4) * s), Math.round((el.top + el.height / 2) * s), 1, 1).data);
+  }, { full: body.full as string, sel: '#acct' });
+  expect(acct.slice(0, 3)).toEqual([58, 63, 75]);
+
+  const ids = readdirSync(DIR).filter(n => n.startsWith('bug-'));
+  expect(ids.length).toBe(1);
+  const id = ids[0];
+  expect(readdirSync(join(DIR, id)).sort()).toEqual(['full.png', 'region.png', 'report.json']);
+  const region = pngSize(join(DIR, id, 'region.png')), full = pngSize(join(DIR, id, 'full.png'));
+  expect(region.w).toBeLessThan(full.w); expect(region.h).toBeLessThan(full.h);
+  const report = JSON.parse(readFileSync(join(DIR, id, 'report.json'), 'utf8'));
+  expect(report.description).toContain('$1,420.00'); expect(report.types).toEqual(['Wrong data']); expect(report.status).toBe('open');
+  expect(report.context.url).toContain('/?bugs=1'); expect(report.context.viewport.w).toBeGreaterThan(300);
+  expect(report.context.elements.some((e: { component: string; path: string }) => e.component.includes('invoice-summary') || e.path.includes('total'))).toBe(true);
+  expect(report.context.consoleErrors.some((e: { message: string }) => e.message.includes('Demo error before report'))).toBe(true);
+
+  // CLI: export a grouped worklist, close it, and see the answer in "My reports".
+  expect(CLI('--dir', DIR, 'export')).toMatch(/1 report/);
+  const md = readFileSync(join(DIR, 'WORKLIST.md'), 'utf8');
+  expect(md).toContain('The total is wrong'); expect(md).toContain(`${id}/region.png`); expect(md).toContain('## /');
+  expect(existsSync(join(DIR, `${id}/region.png`))).toBe(true);
+  CLI('--dir', DIR, 'close', id, '--note', 'Corrected the total calculation');
+  await page.reload();
+  await page.locator('.fab').click();
+  await expect(page.locator('.menu')).toContainText('Fixed');
+  await expect(page.locator('.menu')).toContainText('Corrected the total calculation');
+  await expect(page.locator('.menu .thumb').first()).toHaveAttribute('src', /^blob:/);
+});
+
+test('whole screen, and the tool stays off without ?bugs=1', async ({ page }) => {
+  await page.goto('/?bugs=0');
+  await expect(page.locator('[data-bugframe]')).toHaveCount(0);
+  await openMenu(page);
+  await page.getByRole('menuitem', { name: /Report a problem/ }).click();
+  await page.getByRole('button', { name: 'Whole screen' }).click();
+  await page.locator('textarea').fill('Everything looks off');
+  await page.locator('.send').click();
+  await expect(page.locator('.sent')).toBeVisible();
+  await page.goto('/');                                    // still on without the query string
+  await expect(page.locator('.fab')).toBeVisible();
+  await page.locator('.fab').click(); await page.getByRole('menuitem', { name: /Turn off/ }).click();
+  await expect(page.locator('[data-bugframe]')).toHaveCount(0);
+});
+
+test('keyboard only: open, pick a region with the arrow keys, type, send', async ({ page }) => {
+  await page.goto('/?bugs=1');
+  await page.locator('.fab').focus(); await page.keyboard.press('Enter');
+  await page.getByRole('menuitem', { name: /Report a problem/ }).press('Enter');
+  await expect(page.locator('.layer')).toBeFocused({ timeout: 20_000 });
+  await page.keyboard.press('ArrowRight'); await page.keyboard.press('Enter');
+  await expect(page.locator('.sheet')).toBeVisible();
+  await page.locator('textarea').fill('Keyboard report'); await page.keyboard.press('Escape');
+  await expect(page.locator('.sheet')).toHaveCount(0);
+  await expect(page.locator('.fab')).toBeFocused();
+});
+
+test('download mode: no backend, a .zip is saved and `bugframe import` reads it', async ({ page }) => {
+  await page.route(/download\.html/, r => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>t</title><h1>Static</h1><script src="/bugframe.min.js" data-download></script>' }));
+  await page.goto('/download.html?bugs=1');
+  await page.locator('.fab').click();
+  await expect(page.locator('.menu .list')).toHaveCount(0);
+  await page.getByRole('menuitem', { name: /Report a problem/ }).click();
+  await page.getByRole('button', { name: 'Whole screen' }).click();
+  await page.locator('textarea').fill('Static page problem');
+  const [download] = await Promise.all([page.waitForEvent('download'), page.locator('.send').click()]);
+  const tmp = mkdtempSync(join(tmpdir(), 'bf-e2e-')); const zip = join(tmp, 'r.zip'); await download.saveAs(zip);
+  expect(CLI('--dir', join(tmp, 'reports'), 'import', zip)).toMatch(/Imported 1 report/);
+  expect(CLI('--dir', join(tmp, 'reports'), 'list')).toContain('Static page problem');
+  rmSync(tmp, { recursive: true, force: true });
+});

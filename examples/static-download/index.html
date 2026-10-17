@@ -1,0 +1,11 @@
+<!doctype html>
+<!-- A static page with no backend at all. The reporter saves each report as a .zip the tester sends you (email, chat, drive).
+     Then on your computer:  npx bugframe import report.zip --dir ./bug-reports  &&  npx bugframe export  -->
+<html lang="en">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Static page</title></head>
+<body>
+  <h1>My static site</h1>
+  <p>Open this page with <code>?bugs=1</code> to see the report button.</p>
+  <script src="https://cdn.jsdelivr.net/npm/bugframe@0.1.0/dist/bugframe.min.js" data-download></script>
+</body>
+</html>

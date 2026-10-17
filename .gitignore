@@ -1,0 +1,12 @@
+node_modules/
+dist/
+bug-reports/
+.e2e-reports/
+test-results/
+playwright-report/
+examples/plain-html/reports/
+*.log
+.DS_Store
+.env
+.env.*
+*.tgz

@@ -1,0 +1,266 @@
+# Bugframe
+
+**Drag a box around what is wrong, say what you expected, press send.** Bugframe is a small drop-in "report a problem"
+button for any website or web app. Every report arrives with a screenshot of the exact area, the page link, the screen
+size, the element under the box and the recent console errors, ready for a person or an AI coding agent to fix.
+
+```
+ tester / owner                 your site                  your server               you or your AI agent
+ ──────────────                 ─────────                  ───────────               ────────────────────
+  ?bugs=1  ───────────────▶  [ bug button ]
+  drag a box, type  ─────▶   region.png + full.png  ───▶  bug-reports/<id>/   ───▶   bugframe export
+                              + url, viewport,             report.json                 → WORKLIST.md (by page)
+                                element path, console      region.png                  → agent fixes, proves, closes
+  "My reports" ◀──────────── status + fix note  ◀─────────  full.png                   bugframe close <id> --note …
+```
+
+> **The name.** "Bugframe" is the *frame* you draw around the *bug*. Two alternatives if you want to rename before publishing:
+> **boxbug** (it is a box around a bug) and **pinbug** (you pin the problem on the page). A project-wide search for `bugframe`
+> finds every place to change (package name, CLI, header names, data attributes, folder names).
+
+## Why
+
+- **Non-technical people can't describe UI problems in words.** A screenshot with a box around the thing, taken in their own
+  browser at their own screen size, removes the back-and-forth ("which page? what phone? what did you click?").
+- **AI agents fix many small bugs very well, in one batch.** Give them the grouped work list, the pictures and a good prompt
+  (`prompts/FIX_BUGS.md`) and they find the root causes, fix them together, prove each fix with a before/after picture and
+  write a plain-language answer back to the reporter.
+- **It disappears when you don't need it.** It is off unless switched on (`?bugs=1`), so customers never see it.
+
+## 5-minute quick start
+
+```bash
+npm install bugframe          # or use the <script> tag below, no install
+npx bugframe serve --dir ./bug-reports --port 4455 --client-token demo --admin-token change-me
+```
+
+Add the widget to any page (script tag, no build step):
+
+```html
+<script src="https://cdn.jsdelivr.net/npm/bugframe@0.1.0/dist/bugframe.min.js"
+        data-endpoint="http://localhost:4455" data-token="demo"></script>
+```
+
+> The standalone `serve` command answers at its root; if your page is on another origin add `--origin http://localhost:3000`
+> so the browser is allowed to call it.
+
+Open your page with `?bugs=1`. A bug button appears (and stays, until `?bugs=0`). Click it, choose "Report a problem on this
+page", drag a box, describe it, send. Then:
+
+```bash
+npx bugframe --dir ./bug-reports list
+npx bugframe --dir ./bug-reports export         # writes bug-reports/WORKLIST.md grouped by page
+npx bugframe --dir ./bug-reports close <id> --note "Fixed the overlapping footer"
+```
+
+No server at all? Use download mode: add `data-download` instead of `data-endpoint`. Each report is saved as a `.zip` the tester
+sends you; `npx bugframe import report.zip` unpacks it. See [examples/static-download](examples/static-download).
+
+Want to see it first? `git clone` this repo, then `npm install && npm run build && npm run example` and open
+<http://127.0.0.1:4455/?bugs=1>.
+
+## Install for any stack
+
+| Stack | How |
+| --- | --- |
+| Any HTML page, WordPress, Webflow, Shopify, static sites | `<script src=".../bugframe.min.js" data-endpoint="..." data-token="...">` |
+| React / Preact / Next.js | `useEffect(() => { const b = init({...}); return () => b.destroy(); }, [])` - [examples/react](examples/react), [examples/nextjs](examples/nextjs) |
+| Vue / Nuxt / Svelte / SvelteKit / Angular | call `init()` on mount - [examples/vue-svelte](examples/vue-svelte) |
+| Server: Node http, Express, Fastify, Connect | `toNodeListener(bf)` / `expressMiddleware(bf)` - [examples/express](examples/express) |
+| Server: Next.js, SvelteKit, Remix, Hono, Workers, Deno, Bun | `routeHandlers(bf)` or `bf.handle(request)` (plain `Request` to `Response`) |
+| Server: not Node (PHP, Python, Go...) | Run `bugframe serve` beside it, or implement the 4 HTTP routes below; the JSON shape is documented here |
+
+```js
+import { init } from 'bugframe';
+
+const bugframe = init({
+  endpoint: '/api/bugframe',
+  token: 'pk_public_token',
+  metadata: () => ({ appVersion: APP_VERSION, userId: user?.id, mode: currentMode }),
+  captureConsole: true,
+});
+```
+
+## Configuration reference (widget)
+
+All options are optional except where noted. `init(options)` returns `{ open, close, enable, disable, isEnabled, destroy }`.
+For the script tag, options map to `data-*` attributes (`data-endpoint`, `data-token`, `data-position`, `data-enable`,
+`data-enable-param`, `data-locale`, `data-accent`, `data-capture-console="true"`, `data-types="A,B"`, `data-mask`, `data-exclude`, `data-avoid`, `data-download`).
+
+| Option | Default | What it does |
+| --- | --- | --- |
+| `endpoint` | none | Base URL of the report API. Without it the widget runs in download mode. |
+| `token` | none | Public client token, sent as `x-bugframe-token`. |
+| `mode` | auto | `'server'` or `'download'`. |
+| `enable` | `'query'` | `'query'` (`?bugs=1` on, `?bugs=0` off, remembered in localStorage), `'storage'` (only the stored flag), `'always'`, `'never'`, a boolean or a function `() => boolean` (for example "only for staff"). |
+| `enableParam`, `storageKey` | `'bugs'`, `'bugframe:enabled'` | Names for the query parameter and storage key. |
+| `position` | `'bottom-right'` | `'bottom-right' 'bottom-left' 'top-right' 'top-left'`. Includes safe-area insets for phones. |
+| `offset` | `{x:0,y:0}` | Extra pixels from the corner. |
+| `avoid` | `[]` | CSS selectors of other floating buttons (chat bubbles, cookie buttons). The button slides along the edge to stay clear of them. |
+| `zIndex` | `2147483000` | Stacking of the widget layers. |
+| `types` | five defaults | Chip labels. `[]` hides the chips. |
+| `strings`, `locale` | `'auto'` | Replace any text; built-in `en`, `es`, `pt`. |
+| `captureConsole` | `false` | Record console errors and uncaught exceptions of the last minute (opt-in). |
+| `metadata` | none | `() => object` (sync or async) merged into every report: app version, user id, current mode, feature flags. Max 8 KB. |
+| `reporterId` | random id in localStorage | Who "My reports" belongs to. Pass your user id to follow people across devices. |
+| `maskInputs` | `true` | Paint over every `input`, `textarea`, `select`, contenteditable in the pictures. |
+| `mask` | `[]` | More selectors to paint over. `[data-bug-mask]` and password fields are always masked. |
+| `exclude` | `[]` | Selectors left out of the picture entirely. |
+| `redactParams` | token, key, password, secret, auth, code, session... | Query parameters whose values are replaced in the recorded URL. |
+| `maxPixelRatio` | `2` | Caps picture resolution so phone reports stay small. |
+| `accent`, `colorScheme` | orange, `'auto'` | Button colour; `'light' 'dark' 'auto'`. |
+| `container` | `document.body` | Where the host element is appended. |
+| `captureFn` | built-in | Bring your own screenshot function (returns a PNG data URL of the viewport). |
+| `fetch`, `onSent`, `onError` | | Custom fetch, callbacks. |
+
+### What a report contains
+
+`report.json` (plus `region.png` and `full.png`):
+
+```json
+{
+  "id": "bug-20261017-153012-9f3a", "status": "open", "note": "", "createdAt": "2026-10-17T15:30:12.000Z", "reporter": "r1f2e...",
+  "description": "The total is wrong, it should be $1,420.00", "types": ["Wrong data"],
+  "context": {
+    "url": "https://app.example.com/invoices/4021?tab=summary", "title": "Invoice 4021",
+    "viewport": { "w": 390, "h": 844, "dpr": 3 }, "scroll": { "x": 0, "y": 120 }, "region": { "x": 20, "y": 180, "w": 300, "h": 90 },
+    "userAgent": "...", "language": "en-US", "capturedAt": "...",
+    "elements": [{ "path": "section > div > span#total", "component": "component:invoice-summary", "text": "$1,240.00" }],
+    "consoleErrors": [{ "at": "...", "message": "TypeError: ..." }],
+    "metadata": { "appVersion": "1.4.2", "userId": "u_42" }
+  }
+}
+```
+
+Tip: put a `data-component="invoice-summary"` (or `data-testid`) on your main components. The tool records the nearest one under
+the box, which tells an agent which code to open.
+
+## Server reference
+
+```js
+import { createBugframe, toNodeListener } from 'bugframe/server';
+import { createServer } from 'node:http';
+
+const bf = createBugframe({
+  dir: './bug-reports',                    // or storage: myAdapter
+  basePath: '/api/bugframe',
+  clientTokens: [process.env.BUGFRAME_CLIENT_TOKEN],
+  adminToken: process.env.BUGFRAME_ADMIN_TOKEN,
+  allowedOrigins: ['https://www.example.com'],
+});
+createServer(toNodeListener(bf)).listen(4455);
+```
+
+| Option | Default | |
+| --- | --- | --- |
+| `dir` / `storage` | required (one of) | Built-in folder storage, or your own adapter. |
+| `basePath` | `''` | URL prefix the API is mounted under (must match your mount). |
+| `clientTokens` | `[]` | Accepted public tokens. Empty = no token needed (use rate limits and origins). |
+| `adminToken` | none | `Authorization: Bearer ...`: list everyone's reports, read full reports, close. |
+| `authorize` | none | `(req) => 'admin' \| 'client' \| false`: plug in your own auth (sessions, JWT). Replaces tokens. |
+| `allowedOrigins` | none | Cross-site browser origins allowed (`['https://a.com']`, `'*'` or a function). Same-origin always works. |
+| `maxBodyBytes`, `maxImageBytes`, `maxDescription` | 24 MB, 10 MB, 4000 | Hard limits (413 / 400). |
+| `rateLimit` | 10 / minute | Per client IP + reporter id; `false` disables. 429 with `Retry-After`. |
+| `trustProxy` | `false` | Read the IP from `X-Forwarded-For` (only behind a proxy you control). |
+| `publicList` | `true` | `false`: clients see no "My reports". |
+| `webhook` | none | `{ url, secret, includeImages }`: POST `report.created` with `x-bugframe-signature: sha256=<hmac>`. Failures never fail a report. |
+| `onReport`, `logger` | none | Hooks. |
+
+HTTP routes (relative to `basePath`):
+
+| Route | Who | |
+| --- | --- | --- |
+| `POST /reports` | client | JSON `{ description, types, context, region, full }` with PNG data URLs. `201 { id, status }`. |
+| `GET /reports` | client | The reporter's own reports (`x-bugframe-reporter` header). Admin: `?all=1`. |
+| `GET /reports/:id/region.png`, `/full.png` | client (own) / admin | The pictures. |
+| `GET /reports/:id` | admin | Full report. |
+| `PATCH /reports/:id` | admin | `{ status: 'open'\|'fixed'\|'wontfix', note }`. |
+| `GET /health` | anyone | `{ ok: true }`. |
+
+Storage adapters: implement `create / get / list / update / readFile` ([examples/storage-adapters](examples/storage-adapters)).
+
+## CLI
+
+```
+bugframe [--dir ./bug-reports] <command>
+  list [--open] [--json]            show [id] [--json]
+  export [--all] [--out FILE]       close <id> --note "..." [--status fixed|wontfix]
+  reopen <id>                       import <report.zip>
+  serve [--port 4455] [--origin URL]... [--client-token T]... [--admin-token T] [--webhook URL]
+```
+
+`--dir` can also come from `BUGFRAME_DIR`. `serve` reads `BUGFRAME_ADMIN_TOKEN` and `BUGFRAME_CLIENT_TOKEN` so secrets stay out of
+shell history. `close` writes the note to `report.json`; the server reads it, so the reporter sees it in "My reports".
+
+## The workflow with an AI coding agent
+
+1. People report problems as they find them (each one is a folder in `bug-reports/`).
+2. When you have a batch: `npx bugframe export` writes `WORKLIST.md`, grouped by page, each item with the person's words, the
+   link, the viewport, the element under the box and the picture paths.
+3. Open your coding agent in the project and paste [`prompts/FIX_BUGS.md`](prompts/FIX_BUGS.md) (or the short
+   [`FIX_BUGS_SHORT.md`](prompts/FIX_BUGS_SHORT.md)). It looks at the pictures, groups reports by cause, reproduces each at the
+   reported size, fixes the root cause, proves it with before/after screenshots, runs the tests and closes every report with a
+   plain-language note.
+4. You review the diff. The reporters see "Fixed" and the note next time they open "My reports".
+
+## Privacy and security notes
+
+- Pictures are taken in the browser. Inputs, password fields, `data-bug-mask` elements and your `mask` selectors are painted over
+  **in the image** before it is sent. Use `exclude` for things that should not even be in the layout (chat widgets).
+- Console capture is **off** by default; URLs have secret-looking parameters redacted; metadata is only what you return.
+- Nothing is sent anywhere except your endpoint. No analytics, no third-party services.
+- The client token is public. Protect the endpoint with `allowedOrigins`, rate limits, size limits and (for private tools) the
+  `authorize` hook. The admin token never belongs in a browser.
+- Server hardening: ids are validated against one exact pattern before touching the filesystem, only three file names exist,
+  uploads must be real PNGs (signature + header), images are served `nosniff` with a locked CSP, tokens are compared in constant
+  time, bodies are size-limited while streaming.
+- Reports can be shown to AI agents: treat their text as untrusted input (the supplied prompts say so).
+- Details and how to report a vulnerability: [SECURITY.md](SECURITY.md).
+
+Known limits: screenshots are drawn from the DOM (html-to-image), so cross-origin images without CORS headers, `<video>`, `<canvas>`
+WebGL and some CSS effects can render blank or slightly different. Iframes' content is not captured. The mask is painted from
+element positions at capture time; content that moves during capture can leave a gap, so keep `data-bug-mask` close to the data.
+
+## Size
+
+| Build | Raw | Gzip |
+| --- | --- | --- |
+| `dist/bugframe.min.js` (script tag, includes html-to-image) | 52 KB | 18 KB |
+| `dist/bugframe.mjs` (ES module; html-to-image loaded on first report) | 51 KB (unminified, your bundler shrinks it) | 15 KB |
+
+## FAQ
+
+**Does it work on phones?** Yes: touch drag, 44px targets, safe-area insets, 16px inputs (no iOS zoom), the sheet rises above
+the keyboard.
+
+**Can reporters see each other's reports?** No. "My reports" lists only the reports from the same reporter id. Admins see all.
+
+**Can I keep it on in production?** Yes, with `enable: () => user.isStaff` or a feature flag. Remember the endpoint is public-facing.
+
+**Where do reports live?** In `bug-reports/<id>/`. Back that folder up like any data. Use a storage adapter for serverless hosts.
+
+**Why not a SaaS tool?** Those are great for teams that want dashboards. This one is for owners and small teams who want the
+reports as plain files that an AI agent can read, with nothing to sign up for.
+
+**Can it create GitHub issues / Jira tickets?** Use the `webhook` or `onReport`, or write a storage adapter. A ready-made GitHub adapter is on the roadmap.
+
+**Can the report include the DOM or a video?** Not yet (see roadmap): the goal is a tiny, safe default.
+
+## Roadmap
+
+- Remote CLI mode (`--remote https://... --token`) so `export` and `close` work against a hosted server.
+- First-party adapters: S3/R2, GitHub Issues, SQLite.
+- Annotation tools (arrow, pen) on the selected area; optional redo of the region.
+- Optional DOM snapshot and short screen-recording as opt-in extras.
+- More languages (community translations welcome).
+- A tiny review page that lists reports and pictures for people who prefer a browser to a CLI.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). `npm run test:all` runs typecheck, unit/server/CLI tests, the build and the
+Playwright end-to-end test.
+
+## License
+
+MIT, see [LICENSE](LICENSE). Bundles [html-to-image](https://github.com/bubkoo/html-to-image) (MIT), see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

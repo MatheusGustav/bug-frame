@@ -1,0 +1,46 @@
+{
+  "name": "bugframe",
+  "version": "0.1.0",
+  "description": "Drag a box around what is wrong, describe it, send it. A drop-in bug reporter for any website, with a tiny server, a CLI and a ready-made prompt that lets an AI coding agent fix every report in one pass.",
+  "keywords": ["bug-report", "feedback", "screenshot", "widget", "qa", "ai-agent", "claude-code", "codex", "annotation"],
+  "license": "MIT",
+  "author": "The Bugframe authors",
+  "type": "module",
+  "sideEffects": false,
+  "engines": { "node": ">=18.17" },
+  "main": "./dist/bugframe.mjs",
+  "module": "./dist/bugframe.mjs",
+  "types": "./dist/types/index.d.ts",
+  "unpkg": "./dist/bugframe.min.js",
+  "jsdelivr": "./dist/bugframe.min.js",
+  "exports": {
+    ".": { "types": "./dist/types/index.d.ts", "import": "./dist/bugframe.mjs" },
+    "./iife": "./dist/bugframe.min.js",
+    "./server": { "types": "./types/server.d.ts", "import": "./src/server/index.mjs" },
+    "./package.json": "./package.json"
+  },
+  "bin": { "bugframe": "./src/cli/bin.mjs" },
+  "files": ["dist", "src/server", "src/cli", "types", "prompts", "examples", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md"],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run test:unit && npm run test:server",
+    "test:unit": "vitest run",
+    "test:server": "node --test test/server test/cli",
+    "test:e2e": "playwright test",
+    "test:all": "npm run typecheck && npm test && npm run build && npm run test:e2e",
+    "example": "node examples/plain-html/server.mjs",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+  },
+  "dependencies": {
+    "html-to-image": "1.11.13"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@types/node": "^22.0.0",
+    "esbuild": "^0.25.0",
+    "jsdom": "^26.0.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
+  }
+}
