@@ -1,35 +1,74 @@
 {
   "name": "bugframe",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Drag a box around what is wrong, describe it, send it. A drop-in bug reporter for any website, with a tiny server, a CLI and a ready-made prompt that lets an AI coding agent fix every report in one pass.",
-  "keywords": ["bug-report", "feedback", "screenshot", "widget", "qa", "ai-agent", "claude-code", "codex", "annotation"],
+  "keywords": [
+    "bug-report",
+    "feedback",
+    "screenshot",
+    "widget",
+    "qa",
+    "ai-agent",
+    "claude-code",
+    "codex",
+    "annotation"
+  ],
   "license": "MIT",
   "author": "vmatheus3",
   "homepage": "https://github.com/vmatheus3/bug-frame#readme",
-  "repository": { "type": "git", "url": "git+https://github.com/vmatheus3/bug-frame.git" },
-  "bugs": { "url": "https://github.com/vmatheus3/bug-frame/issues" },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/vmatheus3/bug-frame.git"
+  },
+  "bugs": {
+    "url": "https://github.com/vmatheus3/bug-frame/issues"
+  },
   "type": "module",
   "sideEffects": false,
-  "engines": { "node": ">=18.17" },
+  "engines": {
+    "node": ">=18.17"
+  },
   "main": "./dist/bugframe.mjs",
   "module": "./dist/bugframe.mjs",
   "types": "./dist/types/index.d.ts",
   "unpkg": "./dist/bugframe.min.js",
   "jsdelivr": "./dist/bugframe.min.js",
   "exports": {
-    ".": { "types": "./dist/types/index.d.ts", "import": "./dist/bugframe.mjs" },
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/bugframe.mjs"
+    },
     "./iife": "./dist/bugframe.min.js",
-    "./server": { "types": "./types/server.d.ts", "import": "./src/server/index.mjs" },
+    "./server": {
+      "types": "./types/server.d.ts",
+      "import": "./src/server/index.mjs"
+    },
     "./package.json": "./package.json"
   },
-  "bin": { "bugframe": "./src/cli/bin.mjs" },
-  "files": ["dist", "src/server", "src/cli", "types", "prompts", "examples", "docs", "README.md", "LICENSE", "THIRD_PARTY_NOTICES.md", "CHANGELOG.md", "CONTRIBUTING.md", "SECURITY.md"],
+  "bin": {
+    "bugframe": "./src/cli/bin.mjs"
+  },
+  "files": [
+    "dist",
+    "src/server",
+    "src/cli",
+    "types",
+    "prompts",
+    "examples",
+    "docs",
+    "README.md",
+    "LICENSE",
+    "THIRD_PARTY_NOTICES.md",
+    "CHANGELOG.md",
+    "CONTRIBUTING.md",
+    "SECURITY.md"
+  ],
   "scripts": {
     "build": "node scripts/build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit && npm run test:server",
     "test:unit": "vitest run",
-    "test:server": "node --test test/server test/cli",
+    "test:server": "node --test test/server/*.test.mjs test/cli/*.test.mjs",
     "test:e2e": "playwright test",
     "test:all": "npm run typecheck && npm test && npm run build && npm run test:e2e",
     "example": "node examples/plain-html/server.mjs",

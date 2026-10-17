@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/vmatheus3/bug-frame/actions/workflows/ci.yml/badge.svg)](https://github.com/vmatheus3/bug-frame/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-c2410c.svg)](LICENSE)
-[![Download](https://img.shields.io/badge/download-v0.1.0-c2410c.svg)](https://github.com/vmatheus3/bug-frame/releases/tag/v0.1.0)
+[![Download](https://img.shields.io/badge/download-v0.1.1-c2410c.svg)](https://github.com/vmatheus3/bug-frame/releases/tag/v0.1.1)
 
 ![Bugframe: frame the bug and send the context](docs/images/bugframe-overview.png)
 
@@ -70,11 +70,11 @@ node src/cli/bin.mjs --dir ./examples/plain-html/reports close <id> --note "Fixe
 
 ### Add it to your own project
 
-Install the built package from the [GitHub release](https://github.com/vmatheus3/bug-frame/releases/tag/v0.1.0).
+Install the built package from the [GitHub release](https://github.com/vmatheus3/bug-frame/releases/tag/v0.1.1).
 This installation does not depend on a package named `bugframe` being published to the npm registry:
 
 ```bash
-npm install https://github.com/vmatheus3/bug-frame/releases/download/v0.1.0/bugframe-0.1.0.tgz
+npm install https://github.com/vmatheus3/bug-frame/releases/download/v0.1.1/bugframe-0.1.1.tgz
 npx bugframe serve --dir ./bug-reports --port 4455 --client-token demo --admin-token change-me
 ```
 

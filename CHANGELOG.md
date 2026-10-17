@@ -3,6 +3,11 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/) and the project
 uses [Semantic Versioning](https://semver.org/).
 
+## [0.1.1] - 2026-10-17
+
+### Fixed
+- Select explicit server and CLI test files so the test command works on Node.js 18, 20, and 22.
+
 ## [0.1.0] - 2026-10-17
 
 First public release.
