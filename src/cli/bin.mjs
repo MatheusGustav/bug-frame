@@ -7,6 +7,7 @@ import { pathToFileURL } from 'node:url';
 import { createBugframe } from '../server/handler.mjs';
 import { toNodeListener } from '../server/node.mjs';
 import { CliError, cmdClose, cmdExport, cmdImport, cmdList, cmdReopen, cmdShow } from './commands.mjs';
+import { remoteCommand, remoteCredentials } from './remote.mjs';
 
 const HELP = `bugframe - collect screenshot bug reports and hand them to a person or an AI agent
 
@@ -25,6 +26,9 @@ Commands:
 
 Options:
   --dir <folder>   reports folder (env BUGFRAME_DIR, default ./bug-reports)
+  --remote <HTTPS URL>   operate on a hosted API (list/show/close/reopen); excludes --dir
+  --credentials <file>  private JSON file containing adminToken (or BUGFRAME_ADMIN_TOKEN)
+  --timeout <ms>        remote request timeout, default 30000
   -h, --help       this text          -v, --version   print the version
 `;
 
@@ -32,7 +36,7 @@ async function main(argv) {
   const { values, positionals } = parseArgs({
     args: argv, allowPositionals: true, strict: true,
     options: {
-      dir: { type: 'string' }, open: { type: 'boolean' }, all: { type: 'boolean' }, json: { type: 'boolean' }, out: { type: 'string' }, note: { type: 'string' }, status: { type: 'string' },
+      dir: { type: 'string' }, remote: { type: 'string' }, credentials: { type: 'string' }, timeout: { type: 'string' }, open: { type: 'boolean' }, all: { type: 'boolean' }, json: { type: 'boolean' }, out: { type: 'string' }, note: { type: 'string' }, status: { type: 'string' },
       port: { type: 'string' }, host: { type: 'string' }, origin: { type: 'string', multiple: true }, 'client-token': { type: 'string', multiple: true }, 'admin-token': { type: 'string' }, webhook: { type: 'string' }, 'webhook-secret': { type: 'string' },
       'auth-module': { type: 'string' }, 'base-path': { type: 'string' }, help: { type: 'boolean', short: 'h' }, version: { type: 'boolean', short: 'v' },
     },
@@ -42,6 +46,13 @@ async function main(argv) {
   if (values.help || !cmd) return HELP;
   const dir = values.dir ?? process.env.BUGFRAME_DIR ?? './bug-reports';
   const need = () => { if (!arg) throw new CliError(`${cmd} needs an id`); return arg; };
+  if (values.remote) {
+    if (values.dir) throw new CliError('--remote and --dir cannot be combined.');
+    if (!['list', 'show', 'close', 'reopen'].includes(cmd)) throw new CliError('Remote mode supports list, show, close and reopen only.');
+    const token = await remoteCredentials(values.credentials);
+    return remoteCommand(cmd, arg, { endpoint: values.remote, token, timeoutMs: Number(values.timeout ?? 30000), json: values.json, open: values.open, note: values.note, status: values.status });
+  }
+  if (values.credentials || values.timeout) throw new CliError('--credentials and --timeout require --remote.');
   switch (cmd) {
     case 'list': return cmdList(dir, { open: values.open, json: values.json });
     case 'show': return cmdShow(dir, need(), { json: values.json });
