@@ -135,7 +135,7 @@ export function createBugframe(options = {}) {
   }
 
   /** True when the URL belongs to this API (so a framework can fall through to its own routes otherwise). */
-  const matches = url => { const u = typeof url === 'string' ? new URL(url, 'http://x') : url; return u.pathname === basePath + '/health' || u.pathname === basePath + '/reports' || u.pathname.startsWith(basePath + '/reports/'); };
+  const matches = url => { const u = typeof url === 'string' ? new URL(url, 'http://x') : url; return u.pathname === basePath + '/health' || u.pathname === basePath + '/access' || u.pathname === basePath + '/reports' || u.pathname.startsWith(basePath + '/reports/'); };
 
   async function handle(req, ctx = {}) {
     const url = new URL(req.url), origin = req.headers.get('origin');
@@ -149,6 +149,7 @@ export function createBugframe(options = {}) {
       if (path === '/health') return withCors(json(200, { ok: true }));
       const who = await principal(req);
       if (!who) return withCors(err(401, 'unauthorized', 'Sign in with an account authorized to report bugs.'));
+      if (path === '/access') return withCors(req.method === 'GET' ? json(200, { role: who.role }) : err(405, 'method_not_allowed', 'Not supported.'));
       const parts = path.split('/').filter(Boolean); // ['reports', id?, file?]
       if (parts[0] === 'reports') {
         if (parts.length === 1 && req.method === 'POST') return withCors(await create(req, ctx, who));

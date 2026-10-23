@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><title>{{NAME}} · Report inbox</title>
+  <link rel="stylesheet" href="{{BASE}}/inbox.css"><script src="{{BASE}}/inbox.js" defer></script>
+</head>
+<body data-config="{{CONFIG}}">
+  <header><div><p class="eyebrow">PRIVATE REPORT INBOX</p><h1>{{NAME}}</h1></div><button id="refresh" data-label="refresh">Refresh</button></header>
+  <p id="message" role="status" aria-live="polite"></p>
+  <main>
+    <aside aria-labelledby="reports-title"><h2 id="reports-title" data-label="reports">Reports</h2><p id="empty" data-label="empty" hidden>No reports yet.</p><ul id="reports"></ul></aside>
+    <section aria-labelledby="description">
+      <p id="choose" data-label="choose">Choose a report to review its screenshot and context.</p>
+      <div id="detail" hidden>
+        <h2 id="description" tabindex="-1"></h2><p id="info"></p><a id="page-link" target="_blank" rel="noopener noreferrer" hidden>Open reported page</a>
+        <div class="screenshots"><figure><figcaption data-label="selectedArea">Selected area</figcaption><img id="region" alt="Selected problem area" hidden></figure><figure><figcaption data-label="fullScreenshot">Full screenshot</figcaption><img id="full" alt="Captured viewport" hidden></figure></div>
+        <form id="status-form"><label for="status" data-label="status">Status</label><select id="status"><option value="open" data-label="open">Open</option><option value="fixed" data-label="fixed">Fixed</option><option value="wontfix" data-label="wontfix">Won't fix</option></select><label for="note" data-label="note">Note for the reporter</label><textarea id="note" rows="3" maxlength="2000"></textarea><button id="save" type="submit" data-label="save">Save status</button></form>
+        <details><summary data-label="details">Page context and browser errors</summary><pre id="context"></pre></details>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

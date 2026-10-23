@@ -43,3 +43,24 @@ test('file storage: ignores stray folders and corrupt report.json', async () => 
   assert.equal((await s.list()).length, 1);
   await cleanup(dir);
 });
+
+test('private reports persist across storage instances without depending on deployment files', async () => {
+  const { stat } = await import('node:fs/promises');
+  const root = await tmpDir(); const dir = join(root, 'private', 'reports');
+  try {
+    const first = createFileStorage({ dir });
+    const report = { id: 'bug-20261023-050010-8b34', status: 'open', createdAt: '2026-10-23T05:00:10Z', description: 'Persistent report' };
+    const image = Buffer.from('stored-image');
+    await first.create(report, { region: image, full: image });
+    const restarted = createFileStorage({ dir });
+    assert.equal((await restarted.get(report.id)).description, report.description);
+    assert.deepEqual(await restarted.readFile(report.id, 'region.png'), image);
+    await restarted.update(report.id, { status: 'fixed', note: 'Verified after redeploy' });
+    assert.equal((await first.get(report.id)).status, 'fixed');
+    if (process.platform !== 'win32') {
+      assert.equal((await stat(dir)).mode & 0o077, 0);
+      assert.equal((await stat(join(dir, report.id))).mode & 0o077, 0);
+      for (const file of ['report.json', 'region.png', 'full.png']) assert.equal((await stat(join(dir, report.id, file))).mode & 0o077, 0);
+    }
+  } finally { await cleanup(root); }
+});

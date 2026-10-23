@@ -20,16 +20,16 @@ export function createFileStorage({ dir }) {
   const readJson = async folder => { try { return JSON.parse(await readFile(join(folder, 'report.json'), 'utf8')); } catch { return null; } };
   const writeJson = async (folder, data) => {
     const tmp = join(folder, `report.json.${randomBytes(4).toString('hex')}.tmp`);
-    await writeFile(tmp, JSON.stringify(data, null, 2)); await rename(tmp, join(folder, 'report.json'));
+    await writeFile(tmp, JSON.stringify(data, null, 2), { mode: 0o600, flag: 'wx' }); await rename(tmp, join(folder, 'report.json'));
   };
   return {
     kind: 'filesystem', dir: root,
     async create(report, files) {
       const folder = folderOf(report.id); if (!folder) throw new Error('bad report id');
-      await mkdir(root, { recursive: true });
-      try { await mkdir(folder); } catch (e) { if (e?.code === 'EEXIST') { const err = new Error('exists'); err.code = 'EXISTS'; throw err; } throw e; }
+      await mkdir(root, { recursive: true, mode: 0o700 });
+      try { await mkdir(folder, { mode: 0o700 }); } catch (e) { if (e?.code === 'EEXIST') { const err = new Error('exists'); err.code = 'EXISTS'; throw err; } throw e; }
       try {
-        await writeFile(join(folder, 'region.png'), files.region); await writeFile(join(folder, 'full.png'), files.full); await writeJson(folder, report);
+        await writeFile(join(folder, 'region.png'), files.region, { mode: 0o600 }); await writeFile(join(folder, 'full.png'), files.full, { mode: 0o600 }); await writeJson(folder, report);
       } catch (e) { await rm(folder, { recursive: true, force: true }); throw e; }
     },
     async get(id) { const f = folderOf(id); return f ? readJson(f) : null; },
