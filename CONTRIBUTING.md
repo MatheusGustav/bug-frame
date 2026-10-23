@@ -8,6 +8,9 @@ Use Node.js 20+ for development and widget tests (the patched Vitest runner requ
 Node.js 18.17+; CI runs native server/CLI checks on Node 18, 20, and 22, with widget tests on 20 and 22. OpenSSL is needed for
 the remote CLI HTTPS regression test.
 
+Use the pinned npm 10.9.4 when updating dependencies/lockfiles, matching CI. For example,
+`npx npm@10.9.4 ci --ignore-scripts` performs the frozen install without changing your global npm.
+
 ```bash
 git clone https://github.com/vmatheus3/bug-frame.git
 cd bug-frame
