@@ -71,6 +71,9 @@ class Bugframe implements BugframeInstance {
   private rid: string;
 
   constructor(options: InitOptions) {
+    if (options.mode !== 'download' && (options.mode === 'server' || options.allowDownloadFallback === false) && !options.endpoint?.trim()) {
+      throw new Error('Bugframe server reporting requires an endpoint. Use mode: "download" explicitly for local ZIP files.');
+    }
     this.o = options;
     this.t = resolveStrings(options.locale, options.strings);
     this.serverMode = options.mode ? options.mode === 'server' && Boolean(options.endpoint) : Boolean(options.endpoint);
@@ -384,7 +387,7 @@ class Bugframe implements BugframeInstance {
     }
     if (this.error) {
       sheet.append(h('p', { class: 'error', role: 'alert' }, this.error));
-      if (this.api && !this.accessDenied) { const dl = h('button', { type: 'button', class: 'link' }, t.downloadInstead); dl.addEventListener('click', () => void this.buildReport().then(p => this.download(p))); sheet.append(dl); }
+      if (this.api && !this.accessDenied && this.o.allowDownloadFallback !== false) { const dl = h('button', { type: 'button', class: 'link' }, t.downloadInstead); dl.addEventListener('click', () => void this.buildReport().then(p => this.download(p))); sheet.append(dl); }
     }
     sendBtn.addEventListener('click', () => void this.send()); sync();
     sheet.append(sendBtn);
@@ -414,7 +417,7 @@ if (typeof document !== 'undefined') {
   if (s && s.dataset && ('endpoint' in s.dataset || 'download' in s.dataset || 'autoinit' in s.dataset)) {
     const d = s.dataset, list = (v?: string) => (v ? v.split(',').map(x => x.trim()).filter(Boolean) : undefined);
     const start = () => init({
-      endpoint: d.endpoint, token: d.token, mode: 'download' in d ? 'download' : undefined, enable: (d.enable as InitOptions['enable']) ?? 'query', enableParam: d.enableParam,
+      endpoint: d.endpoint, token: d.token, mode: 'download' in d ? 'download' : d.mode as InitOptions['mode'], allowDownloadFallback: d.allowDownloadFallback === 'false' ? false : undefined, enable: (d.enable as InitOptions['enable']) ?? 'query', enableParam: d.enableParam,
       position: d.position as InitOptions['position'], locale: d.locale, accent: d.accent, captureConsole: d.captureConsole === 'true', types: list(d.types), mask: list(d.mask), exclude: list(d.exclude), avoid: list(d.avoid),
     });
     if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, { once: true }); else start();

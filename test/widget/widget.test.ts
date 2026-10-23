@@ -98,6 +98,36 @@ describe('selecting a region', () => {
 });
 
 describe('sending', () => {
+  it('rejects missing endpoints for server-only reporting while preserving explicit download mode', () => {
+    expect(() => make({ mode: 'server' })).toThrow(/endpoint/);
+    expect(() => make({ allowDownloadFallback: false })).toThrow(/endpoint/);
+    expect(() => make({ mode: 'server', endpoint: '   ', allowDownloadFallback: false })).toThrow(/endpoint/);
+    expect(document.querySelector('[data-bugframe]')).toBeNull();
+    expect(() => make({ mode: 'download', allowDownloadFallback: false })).not.toThrow();
+  });
+  it.each([401, 403, 413, 429, 500, 503, 'offline'])('retains a strict-server report after %s and retries without downloading', async status => {
+    let rejected = true;
+    const fetchMock = async (_url: string, options: RequestInit = {}) => {
+      if (options.method !== 'POST') return jsonRes({ reports: [] });
+      if (!rejected) return jsonRes({ id: 'bug-retried', status: 'open' }, 201);
+      if (status === 'offline') throw new TypeError('Network unavailable');
+      return jsonRes({}, status as number);
+    };
+    const download = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
+    const onSent = vi.fn();
+    await toSheet({ endpoint: '/api', mode: 'server', allowDownloadFallback: false, fetch: fetchMock as typeof fetch, onSent });
+    const image = q<HTMLImageElement>('.preview')!.src;
+    const textarea = q<HTMLTextAreaElement>('textarea')!;
+    textarea.value = 'Keep this report'; textarea.dispatchEvent(new Event('input'));
+    click('.send'); await flush();
+    expect(q<HTMLTextAreaElement>('textarea')!.value).toBe('Keep this report');
+    expect(q<HTMLImageElement>('.preview')!.src).toBe(image);
+    expect(q('.error')).toBeTruthy(); expect(q('.sent')).toBeNull();
+    expect(Array.from(shadow().querySelectorAll('.link')).some(el => el.textContent?.includes('Download'))).toBe(false);
+    rejected = false; click('.send'); await flush();
+    expect(q('.sent')).toBeTruthy(); expect(onSent).toHaveBeenCalledWith({ id: 'bug-retried', downloaded: false });
+    expect(download).not.toHaveBeenCalled();
+  });
   it('posts the report with token, reporter id, metadata and optional console errors', async () => {
     const calls: { url: string; init: RequestInit }[] = [];
     const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => { calls.push({ url, init }); return init.method === 'POST' ? jsonRes({ id: 'bug-1', status: 'open' }, 201) : jsonRes({ reports: [] }); });
