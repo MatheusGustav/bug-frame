@@ -1,6 +1,6 @@
 {
   "name": "bugframe",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Drag a box around what is wrong, describe it, send it. A drop-in bug reporter for any website, with a tiny server, a CLI and a ready-made prompt that lets an AI coding agent fix every report in one pass.",
   "keywords": [
     "bug-report",
@@ -83,6 +83,6 @@
     "esbuild": "^0.25.0",
     "jsdom": "^26.0.0",
     "typescript": "^5.6.0",
-    "vitest": "^3.0.0"
+    "vitest": "4.1.12"
   }
 }

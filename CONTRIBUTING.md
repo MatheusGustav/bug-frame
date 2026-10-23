@@ -4,10 +4,14 @@ Thanks for helping. The project is small on purpose: a widget, a reference serve
 
 ## Setup
 
+Use Node.js 20+ for development and widget tests (the patched Vitest runner requires it). The runtime server/CLI still support
+Node.js 18.17+; CI runs native server/CLI checks on Node 18, 20, and 22, with widget tests on 20 and 22. OpenSSL is needed for
+the remote CLI HTTPS regression test.
+
 ```bash
 git clone https://github.com/vmatheus3/bug-frame.git
 cd bug-frame
-npm ci
+npm ci --ignore-scripts
 npx playwright install chromium
 npm run test:all        # typecheck, unit + server + CLI tests, build, Playwright end-to-end
 ```
