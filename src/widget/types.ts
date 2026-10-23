@@ -75,6 +75,8 @@ export type InitOptions = {
   token?: string;
   /** Without an endpoint the report is downloaded as a .zip. Force it with `mode: 'download'`. */
   mode?: 'server' | 'download';
+  /** Allow a local ZIP after server failures (except 401/403). Default true. False requires an endpoint unless mode is explicitly 'download'. */
+  allowDownloadFallback?: boolean;
   /** When the widget shows. Default 'query': `?bugs=1` switches it on (remembered in this browser), `?bugs=0` off. */
   enable?: EnableMode | boolean;
   /** Query parameter name for the 'query' mode. Default "bugs". */

@@ -3,6 +3,28 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/) and the project
 uses [Semantic Versioning](https://semver.org/).
 
+## [0.3.0] - 2026-10-23
+
+### Added
+- Supported `allowDownloadFallback: false` widget policy and script-tag attributes for server-only reporting. Failed/offline
+  requests retain the report for retry; explicit ZIP download workflows and default fallback behavior remain available.
+- Optional `createInbox` administrator interface with configurable paths/name/labels, private screenshots, safe report rendering,
+  status notes, and existing-session authorization. `GET /access` checks the current verified role without creating a session.
+- Explicit remote CLI mode for list/show/close/reopen, private environment/file credentials, verified HTTPS, redirect refusal,
+  bounded responses and request timeouts. Local CLI behavior remains supported.
+- Portable persistent-hosting example with deployment-independent storage, optional single-owner sessions, private key files,
+  metadata-only report-created events, and guidance for backups, key rotation, proxy trust, and integration migration.
+
+### Fixed
+- Explicit server mode rejects missing/blank endpoints instead of silently producing local ZIP files.
+- New filesystem report directories/files use private 0700/0600 permissions, including atomic JSON replacement files.
+- Node adapters honor forwarded IP/protocol only with explicit proxy trust and handle comma-separated protocol headers.
+
+### Security / development
+- Upgrade the development-only Vitest runner to patched 4.1.12, removing vulnerable mocker/worker-pool dependencies. Runtime
+  support stays Node 18.17+; development/widget tests require Node 20+. CI retains native server/CLI checks on Node 18.
+- Existing server-verified account permissions, admin restrictions, ownership, and authorization-failure ZIP protections remain enforced.
+
 ## [0.2.0] - 2026-10-17
 
 ### Security / breaking changes

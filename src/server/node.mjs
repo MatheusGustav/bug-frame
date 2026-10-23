@@ -8,7 +8,8 @@ import { Readable } from 'node:stream';
 export function toNodeListener(bf, { trustProxy = false } = {}) {
   return async function bugframeListener(req, res, next) {
     const original = req.originalUrl ?? req.url ?? '/';
-    const proto = (trustProxy && req.headers['x-forwarded-proto']) || (req.socket?.encrypted ? 'https' : 'http');
+    const forwardedProto = trustProxy ? String(req.headers['x-forwarded-proto'] ?? '').split(',')[0].trim() : '';
+    const proto = ['http', 'https'].includes(forwardedProto) ? forwardedProto : req.socket?.encrypted ? 'https' : 'http';
     const host = req.headers.host ?? 'localhost';
     const url = new URL(original, `${proto}://${host}`);
     if (typeof next === 'function' && !bf.matches(url)) return next();
@@ -20,7 +21,7 @@ export function toNodeListener(bf, { trustProxy = false } = {}) {
       else body = Readable.toWeb(req);
     }
     const request = new Request(url, { method: req.method, headers, body, duplex: 'half' });
-    const ip = trustProxy ? undefined : req.socket?.remoteAddress;
+    const ip = (trustProxy && String(req.headers['x-forwarded-for'] ?? '').split(',')[0].trim()) || req.socket?.remoteAddress;
     const response = await bf.handle(request, { ip });
     res.statusCode = response.status;
     response.headers.forEach((v, k) => res.setHeader(k, v));

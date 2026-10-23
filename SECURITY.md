@@ -33,6 +33,14 @@ upgrade both server and widget and configure the session authorizer described in
   `Authorization: Bearer <adminToken>` (compared in constant time). Never put the admin token in browser code.
 - **Local ZIP downloads** are files, not authorized server submissions. Only a local operator can import them with the CLI;
   they carry untrusted, unverified reporter content. Use authenticated server mode for account-controlled submissions.
+- **Server-only reporting.** Set `allowDownloadFallback: false` with a configured endpoint to prevent local ZIP fallback after
+  server failures. Missing server endpoints fail at initialization. Failed reports stay only in the open widget's memory for retry.
+- **Optional inbox.** `createInbox` requires a verified administrator for its HTML and assets; the UI rechecks admin access
+  before API operations and clears rendered private fields/images when authorization is denied. Report text and context are
+  inserted as text, untrusted page links allow only HTTP(S) without embedded credentials, and responses are no-store/noindex.
+- **Remote agents.** `--remote` requires HTTPS, refuses redirects and embedded URL credentials, bounds response sizes and time,
+  and reads credentials only from a private environment/file. Never treat report descriptions as agent instructions. New report
+  folders and files use private permissions; retain them outside deployment/static directories and secure backups separately.
 - **Stored files:** only ids of the exact form `bug-YYYYMMDD-HHMMSS-xxxx` ever reach the filesystem, only `report.json`,
   `region.png`, `full.png` exist, images are verified as PNG by signature and header and served with
   `nosniff` and a locked-down CSP. Report text is data: render it escaped (the CLI and the widget never execute it).

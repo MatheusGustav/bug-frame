@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/vmatheus3/bug-frame/actions/workflows/ci.yml/badge.svg)](https://github.com/vmatheus3/bug-frame/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-c2410c.svg)](LICENSE)
-[![Download](https://img.shields.io/badge/download-v0.2.0-c2410c.svg)](https://github.com/vmatheus3/bug-frame/releases/tag/v0.2.0)
+[![Download](https://img.shields.io/badge/download-v0.3.0-c2410c.svg)](https://github.com/vmatheus3/bug-frame/releases/tag/v0.3.0)
 
 ![Bugframe: frame the bug and send the context](docs/images/bugframe-overview.png)
 
@@ -48,7 +48,7 @@ The runnable demo below uses the actual widget. Image files and the final genera
 
 ## 5-minute quick start
 
-Try the complete widget and server locally with Node.js 18.17+:
+Try the complete widget and server locally with Node.js 20+ (the runtime server/CLI also support 18.17+):
 
 ```bash
 git clone https://github.com/vmatheus3/bug-frame.git
@@ -71,11 +71,11 @@ node src/cli/bin.mjs --dir ./examples/plain-html/reports close <id> --note "Fixe
 
 ### Add it to your own project
 
-Install the built package from the [GitHub release](https://github.com/vmatheus3/bug-frame/releases/tag/v0.2.0).
+Install the built package from the [GitHub release](https://github.com/vmatheus3/bug-frame/releases/tag/v0.3.0).
 This installation does not depend on a package named `bugframe` being published to the npm registry:
 
 ```bash
-npm install https://github.com/vmatheus3/bug-frame/releases/download/v0.2.0/bugframe-0.2.0.tgz
+npm install https://github.com/vmatheus3/bug-frame/releases/download/v0.3.0/bugframe-0.3.0.tgz
 # First connect your server-side login verifier as described under "Access control" below.
 npx bugframe serve --dir ./bug-reports --port 4455 --auth-module ./bugframe-auth.mjs
 ```
@@ -105,6 +105,23 @@ No server at all? Use download mode: add `data-download` instead of `data-endpoi
 sends you; `npx bugframe import report.zip` unpacks it. See [examples/static-download](examples/static-download).
 
 The release includes the standalone browser bundle, an installable package with types, and a checksum file.
+
+## Server-only reporting
+
+For a shared report store, use an authenticated endpoint and explicitly disable local download fallback:
+
+```js
+init({
+  endpoint: '/api/bugframe', mode: 'server', allowDownloadFallback: false,
+  captureConsole: true, // optional: retain recent browser errors with the report
+});
+```
+
+Or add `data-mode="server" data-allow-download-fallback="false"` to the script tag. Missing endpoints fail immediately.
+Offline and failed requests keep the description and screenshots in the open widget for retry; they never download a ZIP
+under this policy. These drafts are in browser memory, not persisted across reloads or stored on the server until accepted.
+Explicit `mode: 'download'` and the default no-endpoint ZIP workflow remain available. Default server error fallback stays
+available when allowed, except for authorization failures (401/403).
 
 ## Install for any stack
 
@@ -162,13 +179,14 @@ together; existing reports with browser-generated ownership ids remain accessibl
 
 All options are optional except where noted. `init(options)` returns `{ open, close, enable, disable, isEnabled, destroy }`.
 For the script tag, options map to `data-*` attributes (`data-endpoint`, `data-token`, `data-position`, `data-enable`,
-`data-enable-param`, `data-locale`, `data-accent`, `data-capture-console="true"`, `data-types="A,B"`, `data-mask`, `data-exclude`, `data-avoid`, `data-download`).
+`data-enable-param`, `data-locale`, `data-accent`, `data-capture-console="true"`, `data-types="A,B"`, `data-mask`, `data-exclude`, `data-avoid`, `data-download`, `data-mode="server"`, `data-allow-download-fallback="false"`).
 
 | Option | Default | What it does |
 | --- | --- | --- |
 | `endpoint` | none | Base URL of the report API. Without it the widget runs in download mode. |
 | `token` | none | Legacy public widget identifier (`x-bugframe-token`); grants no access. Use verified login sessions on the server. |
-| `mode` | auto | `'server'` or `'download'`. |
+| `mode` | auto | `'server'` requires an endpoint; `'download'` explicitly creates local ZIP files. |
+| `allowDownloadFallback` | `true` | Set `false` for server-only reporting: no error-state ZIP action, with the report kept for retry. An endpoint is required unless `mode: 'download'` is explicit. |
 | `enable` | `'query'` | `'query'` (`?bugs=1` on, `?bugs=0` off, remembered in localStorage), `'storage'` (only the stored flag), `'always'`, `'never'`, a boolean or a function `() => boolean` (for example "only for staff"). |
 | `enableParam`, `storageKey` | `'bugs'`, `'bugframe:enabled'` | Names for the query parameter and storage key. |
 | `position` | `'bottom-right'` | `'bottom-right' 'bottom-left' 'top-right' 'top-left'`. Includes safe-area insets for phones. |
@@ -254,8 +272,35 @@ HTTP routes (relative to `basePath`):
 | `GET /reports/:id` | admin | Full report. |
 | `PATCH /reports/:id` | admin | `{ status: 'open'\|'fixed'\|'wontfix', note }`. |
 | `GET /health` | anyone | `{ ok: true }`. |
+| `GET /access` | approved account | `{ role: 'client' \| 'admin' }`; checks existing authorization, creates no session. |
 
 Storage adapters: implement `create / get / list / update / readFile` ([examples/storage-adapters](examples/storage-adapters)).
+
+## Optional private inbox
+
+`createInbox` adds a browser interface for administrators without replacing your login system:
+
+```js
+import { createInbox, toNodeListener } from 'bugframe/server';
+
+// bf is the session-authorized createBugframe instance from the server example above.
+const inbox = createInbox({ bugframe: bf, basePath: '/bugs', siteName: 'My site', loginUrl: '/login' });
+const review = toNodeListener(inbox);
+const api = toNodeListener(bf);
+createServer((req, res) => inbox.matches(req.url) ? review(req, res) : api(req, res)).listen(4455);
+```
+
+The inbox lists reports, shows selected/full screenshots and captured page context/browser errors, and lets admins update
+status with a fix note. Report text is rendered as text, not HTML. Every inbox page, asset, report, and screenshot rechecks
+server authorization; ordinary reporters receive 403 for the inbox. Pages use no-store caching, a restricted CSP, and noindex.
+
+Configure `basePath`, the same-origin `apiBase`, `siteName`, an existing `loginUrl`, or `labels` (`refresh`, `reports`, `empty`,
+`choose`, `selectedArea`, `fullScreenshot`, `status`, `open`, `fixed`, `wontfix`, `note`, `save`, `details`). The inbox uses
+same-origin session cookies; never embed an admin bearer token in its JavaScript. It does not provide account invitations,
+password recovery, or your production sign-in flow.
+
+See [the portable persistent-hosting example](examples/server-inbox/README.md), including an explicitly optional single-owner
+session demonstration. Keep the private data folder outside source deployments and public/static roots, and back it up separately.
 
 ## CLI
 
@@ -264,12 +309,35 @@ bugframe [--dir ./bug-reports] <command>
   list [--open] [--json]            show [id] [--json]
   export [--all] [--out FILE]       close <id> --note "..." [--status fixed|wontfix]
   reopen <id>                       import <report.zip>
+  [--remote HTTPS_API_URL --credentials FILE --timeout 30000] list|show|close|reopen
   serve [--port 4455] [--origin URL]... [--auth-module FILE] [--admin-token T] [--webhook URL]
 ```
 
 `--dir` can also come from `BUGFRAME_DIR`. `serve` reads `BUGFRAME_ADMIN_TOKEN` and `BUGFRAME_AUTH_MODULE`.
 An auth module exports `authorize(request)` and verifies your existing login. Without a module, only the admin credential is accepted.
 Startup requires at least one of those settings; public `--client-token` access has been removed. `close` writes the note to `report.json`; the server reads it, so the reporter sees it in "My reports".
+
+### Remote agent commands
+
+Remote mode is explicit and never reads a local report folder:
+
+```bash
+# Set BUGFRAME_ADMIN_TOKEN privately in your environment, or supply a private credential file.
+# Default file: ~/.config/bugframe/credentials.json containing { "adminToken": "your-private-key" }
+# Make the directory private (700) and the file private (600).
+bugframe --remote https://example.com/api/bugframe list --open
+bugframe --remote https://example.com/api/bugframe show <id>
+bugframe --remote https://example.com/api/bugframe close <id> --note "Deployed and verified the fix"
+bugframe --remote https://example.com/api/bugframe reopen <id>
+```
+
+`--credentials FILE` or `BUGFRAME_CREDENTIALS_FILE` selects another private JSON file. `BUGFRAME_ADMIN_TOKEN` takes precedence.
+The client requires HTTPS, refuses redirects and embedded URL credentials, and times out after 30 seconds (`--timeout` sets
+1–300000 milliseconds). Credentials never appear in request-error output. `show` prints JSON plus protected image URLs;
+accessing those images also requires authorization. Responses are limited to 8 MB. `--json` gives machine-readable list or
+status output. Remote `export`, `import`, and `serve` are rejected, and `--remote` cannot be combined with `--dir`.
+Local CLI commands retain their existing behavior. Treat report text as untrusted evidence, and close reports only after
+explicitly requested fixes have been deployed and verified.
 
 ## The workflow with an AI coding agent
 
@@ -304,8 +372,8 @@ element positions at capture time; content that moves during capture can leave a
 
 | Build | Raw | Gzip |
 | --- | --- | --- |
-| `dist/bugframe.min.js` (script tag, includes html-to-image) | 52 KB | 18 KB |
-| `dist/bugframe.mjs` (ES module; html-to-image loaded on first report) | 51 KB (unminified, your bundler shrinks it) | 15 KB |
+| `dist/bugframe.min.js` (script tag, includes html-to-image) | 53 KB | 18 KB |
+| `dist/bugframe.mjs` (ES module; html-to-image loaded on first report) | 53 KB (unminified, your bundler shrinks it) | 15 KB |
 
 ## FAQ
 
@@ -327,12 +395,12 @@ reports as plain files that an AI agent can read, with nothing to sign up for.
 
 ## Roadmap
 
-- Remote CLI mode (`--remote https://... --token`) so `export` and `close` work against a hosted server.
+- Remote worklist export with authenticated screenshot retrieval.
 - First-party adapters: S3/R2, GitHub Issues, SQLite.
 - Annotation tools (arrow, pen) on the selected area; optional redo of the region.
 - Optional DOM snapshot and short screen-recording as opt-in extras.
 - More languages (community translations welcome).
-- A tiny review page that lists reports and pictures for people who prefer a browser to a CLI.
+- Inbox pagination and richer filtering for larger report stores.
 
 ## Contributing
 

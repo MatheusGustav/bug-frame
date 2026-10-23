@@ -118,3 +118,34 @@ test('download mode: no backend, a .zip is saved and `bugframe import` reads it'
   expect(CLI('--dir', join(tmp, 'reports'), 'list')).toContain('Static page problem');
   rmSync(tmp, { recursive: true, force: true });
 });
+
+test('private inbox shows safe report content and screenshots, updates status, then clears on revocation', async ({ page }, testInfo) => {
+  expect((await page.request.get('/bugs/')).status()).toBe(403); // an approved reporter is not an admin
+  await signIn(page, 'e2e-admin-password');
+  const { PNG_URL } = await import('../helpers.mjs');
+  const description = '<img src=x onerror=alert(1)> Example report';
+  const res = await page.request.post('/api/bugframe/reports', { data: { description, region: PNG_URL, full: PNG_URL, context: { url: 'javascript:alert(1)', viewport: { w: 390, h: 844 }, consoleErrors: [{ at: 'now', message: '<script>untrusted()</script>' }] } } });
+  expect(res.status()).toBe(201); const { id } = await res.json();
+  await page.goto('/bugs/');
+  await page.getByRole('button', { name: `[open] ${description}`, exact: true }).click();
+  await expect(page.locator('#description')).toHaveText(description);
+  await expect(page.locator('#description img')).toHaveCount(0);
+  await expect(page.locator('#page-link')).toBeHidden();
+  await expect(page.locator('#region')).toHaveAttribute('src', /^blob:/);
+  await expect(page.locator('#full')).toHaveAttribute('src', /^blob:/);
+  await page.locator('summary').click(); await expect(page.locator('#context')).toContainText('<script>untrusted()</script>');
+  await page.screenshot({ path: testInfo.outputPath('inbox.png'), fullPage: true });
+  await page.getByLabel('Status', { exact: true }).selectOption('fixed');
+  await page.getByLabel('Note for the reporter').fill('Deployed and verified');
+  await page.getByRole('button', { name: 'Save status' }).click();
+  await expect(page.getByRole('status')).toHaveText('Status saved.');
+  expect((await (await page.request.get(`/api/bugframe/reports/${id}`)).json()).status).toBe('fixed');
+  await page.request.post('/logout', { headers: { origin: 'http://127.0.0.1:4455' } });
+  await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+  await expect(page.locator('#detail')).toBeHidden();
+  await expect(page.locator('#description')).toBeEmpty();
+  await expect(page.locator('#context')).toBeEmpty();
+  await expect(page.locator('#note')).toHaveValue('');
+  await expect(page.getByRole('status')).toContainText('administrator session');
+  expect((await page.request.get(`/api/bugframe/reports/${id}/region.png`)).status()).toBe(401);
+});
