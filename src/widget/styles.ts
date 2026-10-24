@@ -70,5 +70,14 @@ button { font: inherit; color: inherit; }
 .error { margin: 0; color: var(--bf-err); font-size: 15px; }
 .sent { display: grid; justify-items: center; gap: 6px; padding: 24px 0; text-align: center; color: var(--bf-ok); } .sent span { color: var(--bf-muted); } .sent svg { width: 28px; height: 28px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+[hidden] { display: none !important; }
+.review-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.review-actions a { width: 100%; color: var(--bf-accent); font-size: 13px; padding: 8px 0; }
+.review-actions button { border: 1px solid var(--bf-line); border-radius: 8px; background: var(--bf-bg); padding: 8px 10px; min-height: 44px; cursor: pointer; font-size: 13px; }
+.review-actions button:disabled { opacity: .5; cursor: wait; }
+.adjustment { width: 100%; display: grid; gap: 8px; }
+.review-message { padding: 8px; font-size: 13px; }
+.status.is-approved { color: var(--bf-ok); }
+.status.is-ready_for_review { color: var(--bf-accent); }
 @media print { .bf { display: none !important; } }
 `;

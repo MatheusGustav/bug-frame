@@ -19,7 +19,8 @@ export type ReportContext = {
   metadata: Record<string, unknown>;
 };
 
-export type ReportStatus = 'open' | 'fixed' | 'wontfix';
+export type FeedbackKind = 'bug' | 'content' | 'design' | 'idea';
+export type ReportStatus = 'open' | 'reviewed' | 'in_progress' | 'ready_for_review' | 'changes_requested' | 'approved' | 'fixed' | 'wontfix';
 
 export type ReportSummary = {
   id: string;
@@ -29,12 +30,42 @@ export type ReportSummary = {
   description: string;
   types: string[];
   page: string;
+  kind?: FeedbackKind;
+  currentText?: string;
+  suggestedText?: string;
+  reviewVersion?: number;
+  reviewNote?: string;
+  activity?: { status: ReportStatus; note: string; at: string; by: 'developer' | 'customer' }[];
 };
 
 export type Position = 'bottom-right' | 'bottom-left' | 'top-right' | 'top-left';
 export type EnableMode = 'query' | 'storage' | 'always' | 'never' | (() => boolean);
 
 export type Strings = {
+  kindLabel: string;
+  kindBug: string;
+  kindContent: string;
+  kindDesign: string;
+  kindIdea: string;
+  hintBug: string;
+  hintContent: string;
+  hintDesign: string;
+  hintIdea: string;
+  currentText: string;
+  suggestedText: string;
+  statusReviewed: string;
+  statusInProgress: string;
+  statusReady: string;
+  statusChangesRequested: string;
+  statusApproved: string;
+  approve: string;
+  requestChanges: string;
+  adjustmentLabel: string;
+  sendAdjustment: string;
+  reviewFailed: string;
+  reviewSaved: string;
+  refresh: string;
+  viewPage: string;
   button: string;
   menuReport: string;
   menuMine: string;
@@ -89,7 +120,7 @@ export type InitOptions = {
   /** CSS selectors of other floating buttons the button should sit clear of. */
   avoid?: string[];
   zIndex?: number;
-  /** Report types shown as chips. `[]` hides them. */
+  /** Optional extra tags shown as chips. The four built-in feedback kinds are always available. */
   types?: string[];
   /** Replace the user-facing texts. Partial; missing keys fall back to the locale. */
   strings?: Partial<Strings>;

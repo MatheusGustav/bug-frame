@@ -47,7 +47,7 @@ describe('mounting', () => {
     const chat = document.getElementById('chat')!; chat.getBoundingClientRect = () => ({ left: window.innerWidth - 70, right: window.innerWidth - 10, top: window.innerHeight - 70, bottom: window.innerHeight - 10, width: 60, height: 60, x: 0, y: 0, toJSON() {} });
     make({ avoid: ['#chat'] }); expect(parseInt(q('.fab-wrap')!.style.getPropertyValue('--bf-ey'))).toBeGreaterThan(40);
   });
-  it('uses the localized strings', () => { make({ locale: 'pt' }); expect(q('.fab')!.getAttribute('aria-label')).toBe('Relatar um problema'); });
+  it('uses the localized strings', () => { make({ locale: 'pt' }); expect(q('.fab')!.getAttribute('aria-label')).toBe('Deixar feedback'); });
 });
 
 describe('accessibility', () => {
@@ -68,9 +68,9 @@ describe('accessibility', () => {
   });
   it('type chips expose pressed state', async () => {
     await toSheet({ types: ['One', 'Two'] });
-    const chip = shadow().querySelectorAll<HTMLButtonElement>('.chips button')[1]; expect(chip.getAttribute('aria-pressed')).toBe('false'); chip.click(); expect(chip.getAttribute('aria-pressed')).toBe('true');
+    const chip = shadow().querySelectorAll<HTMLButtonElement>('.chips:not(.kinds) button')[1]; expect(chip.getAttribute('aria-pressed')).toBe('false'); chip.click(); expect(chip.getAttribute('aria-pressed')).toBe('true');
   });
-  it('types: [] hides the chips', async () => { await toSheet({ types: [] }); expect(q('.chips')).toBeNull(); });
+  it('types: [] hides the chips', async () => { await toSheet({ types: [] }); expect(q('.chips:not(.kinds)')).toBeNull(); expect(q('.kinds')).toBeTruthy(); });
   it('region can be chosen from the keyboard', async () => {
     make(); click('.fab'); click('.menu .main'); await flush();
     const layer = q('.layer')!; layer.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', bubbles: true })); expect(q('.rect')!.style.display).toBe('block');
@@ -132,17 +132,17 @@ describe('sending', () => {
     const calls: { url: string; init: RequestInit }[] = [];
     const fetchMock = vi.fn(async (url: string, init: RequestInit = {}) => { calls.push({ url, init }); return init.method === 'POST' ? jsonRes({ id: 'bug-1', status: 'open' }, 201) : jsonRes({ reports: [] }); });
     const onSent = vi.fn();
-    await toSheet({ endpoint: '/api/bf/', token: 'pk_1', reporterId: 'user-7', fetch: fetchMock as unknown as typeof fetch, metadata: async () => ({ build: '9.9', mode: 'beta' }), captureConsole: true, onSent });
+    await toSheet({ types: ['Wrong layout'], endpoint: '/api/bf/', token: 'pk_1', reporterId: 'user-7', fetch: fetchMock as unknown as typeof fetch, metadata: async () => ({ build: '9.9', mode: 'beta' }), captureConsole: true, onSent });
     console.error('page exploded');
     const ta = q<HTMLTextAreaElement>('textarea')!; const send = q<HTMLButtonElement>('.send')!; expect(send.disabled).toBe(true);
     ta.value = '  The total is wrong  '; ta.dispatchEvent(new Event('input')); expect(send.disabled).toBe(false);
-    shadow().querySelectorAll<HTMLButtonElement>('.chips button')[0].click();
+    shadow().querySelectorAll<HTMLButtonElement>('.chips:not(.kinds) button')[0].click();
     send.click(); await flush();
     const post = calls.find(c => c.init.method === 'POST')!;
     expect(post.url).toBe('/api/bf/reports');
     const headers = post.init.headers as Record<string, string>; expect(headers['x-bugframe-token']).toBe('pk_1'); expect(headers['x-bugframe-reporter']).toBe('user-7');
     const body = JSON.parse(post.init.body as string);
-    expect(body.description).toBe('The total is wrong'); expect(body.types).toEqual(['Wrong layout']); expect(body.region).toBe(PNG); expect(body.full).toBe(PNG);
+    expect(body.description).toBe('The total is wrong'); expect(body.kind).toBe('bug'); expect(body.types).toEqual(['Wrong layout']); expect(body.region).toBe(PNG); expect(body.full).toBe(PNG);
     expect(body.context.metadata).toEqual({ build: '9.9', mode: 'beta' }); expect(body.context.viewport.w).toBe(window.innerWidth); expect(body.context.consoleErrors.some((e: { message: string }) => e.message.includes('page exploded'))).toBe(true);
     expect(onSent).toHaveBeenCalledWith({ id: 'bug-1', downloaded: false }); expect(q('.sent')).toBeTruthy(); expect(q('[role=status]')!.textContent).toMatch(/Sent/);
   });
@@ -200,8 +200,44 @@ describe('my reports', () => {
     make({ endpoint: '/api', enable: 'query', fetch: f as unknown as typeof fetch }); localStorage.setItem('bugframe:enabled', '1'); inst!.enable(); await flush();
     expect(q('.count')!.textContent).toBe('1');
     click('.fab'); await flush(); await tick(10);
-    const text = q('.menu')!.textContent!; expect(text).toContain('My reports (2)'); expect(text).toContain('Open'); expect(text).toContain('Fixed'); expect(text).toContain('Widened the button');
+    const text = q('.menu')!.textContent!; expect(text).toContain('My requests (2)'); expect(text).toContain('Submitted'); expect(text).toContain('Fixed'); expect(text).toContain('Widened the button');
     expect(q('.menu .off')).toBeTruthy(); click('.menu .off'); expect(document.querySelector('[data-bugframe]')).toBeNull(); expect(localStorage.getItem('bugframe:enabled')).toBeNull();
   });
   it('no turn-off item when always on', () => { make({ endpoint: '/api', fetch: (async () => jsonRes({ reports: [] })) as unknown as typeof fetch }); click('.fab'); expect(q('.menu .off')).toBeNull(); });
+});
+
+describe('customer feedback and review', () => {
+  it('keeps the description while changing kind and sends structured content changes', async () => {
+    const calls: Record<string, unknown>[] = [];
+    await toSheet({ endpoint: '/api/b', fetch: (async (_url: string, options: RequestInit = {}) => {
+      if (options.method === 'POST') { calls.push(JSON.parse(String(options.body))); return jsonRes({ id: 'feedback', status: 'open' }, 201); }
+      return jsonRes({ reports: [] });
+    }) as typeof fetch });
+    const field = q<HTMLTextAreaElement>('#bf-text')!; field.value = 'Please update our headline'; field.dispatchEvent(new Event('input'));
+    shadow().querySelectorAll<HTMLButtonElement>('.kinds button')[1].click();
+    expect(q<HTMLTextAreaElement>('#bf-text')!.value).toBe('Please update our headline');
+    for (const [selector, value] of [['#bf-currentText', 'Old headline'], ['#bf-suggestedText', 'A clearer headline']]) {
+      const input = q<HTMLTextAreaElement>(selector)!; input.value = value; input.dispatchEvent(new Event('input'));
+    }
+    click('.send'); await flush();
+    expect(calls[0]).toMatchObject({ kind: 'content', description: 'Please update our headline', currentText: 'Old headline', suggestedText: 'A clearer headline', types: [] });
+  });
+
+  it('responds to a delivered review and clears private requests when access is revoked', async () => {
+    let status = 'ready_for_review', revoked = false; const responses: unknown[] = [];
+    const request = async (url: string, options: RequestInit = {}) => {
+      if (revoked) return jsonRes({}, 401);
+      if (url.endsWith('/review')) { responses.push(JSON.parse(String(options.body))); status = 'approved'; return jsonRes({}); }
+      if (url.endsWith('.png')) return new Response(new Blob([], { type: 'image/png' }));
+      return jsonRes({ reports: [{ id: 'bug-review', status, description: 'Change headline', note: 'Updated. Please check.', types: [], page: '/', reviewVersion: 2 }] });
+    };
+    make({ endpoint: '/api/b', fetch: request as typeof fetch }); await flush(); click('.fab'); await flush();
+    const approve = Array.from(shadow().querySelectorAll('button')).find(button => button.textContent === 'Looks good')!;
+    approve.click(); await flush();
+    expect(responses).toEqual([{ action: 'approve', reviewVersion: 2, note: '' }]);
+    expect(q('.menu')!.textContent).toContain('Approved'); expect(q('.review-actions')).toBeNull();
+    revoked = true;
+    Array.from(shadow().querySelectorAll('button')).find(button => button.textContent === 'Refresh requests')!.click(); await flush();
+    expect(q('.menu')!.textContent).not.toContain('Change headline'); expect(q('.menu')!.textContent).toContain('Sign in with an account authorized');
+  });
 });

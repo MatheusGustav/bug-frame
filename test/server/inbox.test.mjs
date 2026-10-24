@@ -13,13 +13,13 @@ const make = () => {
   return { bugframe, revoke: () => { active = false; } };
 };
 
-test('inbox HTML and assets require verified admins and honor revocation', async () => {
+test('inbox HTML requires admins, shared assets require approved accounts and honor revocation', async () => {
   const { bugframe, revoke } = make();
   const inbox = createInbox({ bugframe, basePath: '/support/inbox', siteName: 'Community reports', loginUrl: '/sign-in' });
   for (const asset of ['', '/', '/inbox.js', '/inbox.css']) {
     const request = cookie => new Request(U + asset, { headers: cookie ? { cookie } : {} });
     assert.equal((await inbox.handle(request())).status, 401);
-    assert.equal((await inbox.handle(request('tester'))).status, 403);
+    assert.equal((await inbox.handle(request('tester'))).status, asset.endsWith('.js') || asset.endsWith('.css') ? 200 : 403);
     const response = await inbox.handle(request('admin'));
     assert.equal(response.status, 200);
     assert.equal(response.headers.get('cache-control'), 'no-store');
@@ -49,4 +49,12 @@ test('access checks disclose only verified role and cannot create a session or c
   assert.deepEqual(await (await bugframe.handle(new Request(url, { headers: { cookie: 'tester' } }))).json(), { role: 'client' });
   assert.deepEqual(await (await bugframe.handle(new Request(url, { headers: { cookie: 'admin' } }))).json(), { role: 'admin' });
   assert.equal((await bugframe.handle(new Request(url, { method: 'POST', headers: { cookie: 'admin' } }))).status, 405);
+});
+
+test('customer request page is approved-account only and the invitation shell is public only when enabled', async () => {
+  const { bugframe } = make(); const inbox = createInbox({ bugframe, basePath: '/support/inbox' });
+  assert.equal((await inbox.handle(new Request(U + '/review'))).status, 401);
+  const client = await inbox.handle(new Request(U + '/review', { headers: { cookie: 'tester' } }));
+  assert.equal(client.status, 200); assert.match(await client.text(), /&quot;customer&quot;:true/);
+  assert.equal((await inbox.handle(new Request(U + '/invite'))).status, 404);
 });
