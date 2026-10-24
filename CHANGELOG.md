@@ -3,6 +3,18 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/) and the project
 uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.1] - 2026-10-23
+
+### Fixed
+- Complete English, Spanish, and Portuguese support across the developer inbox, customer requests, invitation acceptance, access-denied pages, statuses, dates, validation, and success/error responses. The widget’s authorization copy now consistently refers to feedback.
+- Add a portal language selector, `createInbox({ locale })`, browser language negotiation, and shareable `?lang=en|es|pt` preferences. Switching languages keeps unsaved notes, selected statuses, and pending invitation secrets in memory. The same-origin widget in `auto` mode follows the saved preference.
+- Serve data-free styles and translation helpers to signed-out invitees so the public invitation page renders correctly. Request pages, application JavaScript, reports, and screenshots retain their authorization checks.
+
+### Documentation
+- Replace the three outdated illustrative GitHub images with real screenshots and add invitation, review, approval, Spanish, and Portuguese screenshots.
+- Add a reproducible screenshot command and a fictional client website demo. Captures use disposable sessions/storage and actually change the example headline before the customer approves it.
+- Let the localhost demo test runner explicitly raise its sign-in limit for the expanded browser matrix; the default remains 20 attempts per minute.
+
 ## [0.4.0] - 2026-10-23
 
 ### Added

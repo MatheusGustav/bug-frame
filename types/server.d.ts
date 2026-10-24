@@ -134,6 +134,8 @@ export interface InboxOptions {
   loginUrl?: string;
   /** Link back to the website, same-origin path. Default /?bugs=1. */
   siteUrl?: string;
+  /** Default page language; auto negotiates Accept-Language. Visitors can select en/es/pt without losing drafts. */
+  locale?: 'auto' | 'en' | 'es' | 'pt';
   labels?: Partial<Record<'refresh' | 'reports' | 'empty' | 'choose' | 'selectedArea' | 'fullScreenshot' | 'status' | 'open' | 'fixed' | 'wontfix' | 'note' | 'save' | 'details', string>>;
 }
 export function createInbox(options: InboxOptions): Pick<Bugframe, 'handle' | 'matches' | 'basePath'>;

@@ -15,6 +15,8 @@ const adminPassword = process.env.BUGFRAME_DEMO_ADMIN_PASSWORD ?? randomBytes(16
 const customerPassword = process.env.BUGFRAME_DEMO_CUSTOMER_PASSWORD ?? randomBytes(16).toString('hex');
 const digest = value => createHash('sha256').update(value).digest();
 const sessions = new Map();
+const loginLimit = Number(process.env.BUGFRAME_DEMO_LOGIN_LIMIT ?? 20);
+if (!Number.isInteger(loginLimit) || loginLimit < 1 || loginLimit > 1000) throw new Error('Demo login limit must be 1–1000.');
 let loginAttempts = [];
 const cookieName = 'bugframe_demo_session';
 const sessionId = cookie => cookie?.split(';').map(s => s.trim()).find(s => s.startsWith(`${cookieName}=`))?.slice(cookieName.length + 1);
@@ -29,9 +31,9 @@ const bf = createBugframe({
   rateLimit: { max: 30, windowMs: 60_000 }, logger: (...a) => console.error('[bugframe]', ...a),
 });
 const api = toNodeListener(bf);
-const inbox = createInbox({ bugframe: bf, loginUrl: '/login', siteName: 'Bugframe demo' });
+const inbox = createInbox({ bugframe: bf, loginUrl: '/login', siteName: process.env.BUGFRAME_SITE_NAME ?? 'Bugframe demo' });
 const review = toNodeListener(inbox);
-const assets = { '/': ['index.html', 'text/html; charset=utf-8', here], '/login': ['login.html', 'text/html; charset=utf-8', here], '/bugframe.min.js': ['bugframe.min.js', 'text/javascript; charset=utf-8', join(here, '../../dist')] };
+const assets = { '/review-demo': ['review-demo.html', 'text/html; charset=utf-8', here], '/': ['index.html', 'text/html; charset=utf-8', here], '/login': ['login.html', 'text/html; charset=utf-8', here], '/bugframe.min.js': ['bugframe.min.js', 'text/javascript; charset=utf-8', join(here, '../../dist')] };
 const redirect = res => { res.writeHead(303, { location: '/?bugs=1' }); res.end(); };
 
 const server = createServer(async (req, res) => {
@@ -48,7 +50,7 @@ const server = createServer(async (req, res) => {
       return redirect(res);
     }
     loginAttempts = loginAttempts.filter(t => t > Date.now() - 60000);
-    if (loginAttempts.length >= 20) { res.writeHead(429, { 'retry-after': '60' }); return res.end('Too many sign-in attempts.'); }
+    if (loginAttempts.length >= loginLimit) { res.writeHead(429, { 'retry-after': '60' }); return res.end('Too many sign-in attempts.'); }
     loginAttempts.push(Date.now());
     if (req.headers['content-type']?.split(';')[0] !== 'application/x-www-form-urlencoded') { res.writeHead(415); return res.end('Use the sign-in form.'); }
     const chunks = []; let size = 0;
@@ -69,7 +71,7 @@ const server = createServer(async (req, res) => {
   if (!hit) { res.writeHead(404); return res.end('Not found'); }
   try {
     let content = await readFile(join(hit[2], hit[0]));
-    if (path === '/') {
+    if (path === '/' || path === '/review-demo') {
       const signedIn = Boolean(userFor(req.headers.cookie));
       const access = await bf.handle(new Request(`http://127.0.0.1:${port}/api/bugframe/access`, { headers: { cookie: req.headers.cookie ?? '' } }));
       const approved = access.ok;

@@ -18,7 +18,7 @@ test('inbox HTML requires admins, shared assets require approved accounts and ho
   const inbox = createInbox({ bugframe, basePath: '/support/inbox', siteName: 'Community reports', loginUrl: '/sign-in' });
   for (const asset of ['', '/', '/inbox.js', '/inbox.css']) {
     const request = cookie => new Request(U + asset, { headers: cookie ? { cookie } : {} });
-    assert.equal((await inbox.handle(request())).status, 401);
+    assert.equal((await inbox.handle(request())).status, asset.endsWith('.css') ? 200 : 401);
     assert.equal((await inbox.handle(request('tester'))).status, asset.endsWith('.js') || asset.endsWith('.css') ? 200 : 403);
     const response = await inbox.handle(request('admin'));
     assert.equal(response.status, 200);
@@ -57,4 +57,37 @@ test('customer request page is approved-account only and the invitation shell is
   const client = await inbox.handle(new Request(U + '/review', { headers: { cookie: 'tester' } }));
   assert.equal(client.status, 200); assert.match(await client.text(), /&quot;customer&quot;:true/);
   assert.equal((await inbox.handle(new Request(U + '/invite'))).status, 404);
+});
+
+test('all portal languages have complete keys and server-rendered text follows explicit locale and Accept-Language', async () => {
+  const { LOCALES, resolveLocale } = await import('../../src/server/inbox/i18n.js');
+  const keys = Object.keys(LOCALES.en).sort();
+  for (const dictionary of Object.values(LOCALES)) assert.deepEqual(Object.keys(dictionary).sort(), keys);
+  assert.equal(resolveLocale('auto', 'fr;q=1,pt-BR;q=0.8,es;q=0.7'), 'pt');
+  assert.equal(resolveLocale('auto', 'es;q=0,pt;q=0.9,en;q=0.4'), 'pt');
+  assert.equal(resolveLocale('auto', 'fr'), 'en');
+  const { bugframe } = make();
+  const inbox = createInbox({ bugframe, basePath: '/support/inbox' });
+  for (const [locale, heading, signIn] of [['en', 'Customer invitations', 'Sign in'], ['es', 'Invitaciones de clientes', 'Iniciar sesión'], ['pt', 'Convites de clientes', 'Entrar']]) {
+    const html = await (await inbox.handle(new Request(U + '?lang=' + locale, { headers: { cookie: 'admin' } }))).text();
+    assert.match(html, new RegExp(`<html lang="${locale}">`)); assert.ok(html.includes(heading)); assert.doesNotMatch(html, /\{\{T:/);
+    const denied = await (await createInbox({ bugframe, basePath: '/support/inbox', loginUrl: '/login' }).handle(new Request(U, { headers: { 'accept-language': locale } }))).text();
+    assert.ok(denied.includes(signIn)); assert.ok(denied.includes(`lang="${locale}"`));
+  }
+  const configured = createInbox({ bugframe, basePath: '/support/inbox', locale: 'pt' });
+  assert.match(await (await configured.handle(new Request(U, { headers: { cookie: 'admin', 'accept-language': 'en' } }))).text(), /lang="pt"/);
+  assert.throws(() => createInbox({ bugframe, locale: 'fr' }), /locale/);
+});
+
+test('public invitation styling and language assets expose no project or account data', async () => {
+  const { createMemoryInvitationStorage } = await import('../../src/server/index.mjs');
+  const bugframe = createBugframe({ storage: createMemoryStorage(), invitations: { storage: createMemoryInvitationStorage() } });
+  const inbox = createInbox({ bugframe, basePath: '/support/inbox', siteName: 'Private project name' });
+  for (const file of ['inbox.css', 'i18n.js', 'ui.js', 'invite.js']) {
+    const response = await inbox.handle(new Request(U + '/' + file));
+    assert.equal(response.status, 200); assert.ok(!(await response.text()).includes('Private project name'));
+  }
+  assert.match(await (await inbox.handle(new Request(U + '/invite?lang=es'))).text(), /Aceptar invitación/);
+  assert.equal((await inbox.handle(new Request(U + '/review'))).status, 401);
+  assert.equal((await inbox.handle(new Request(U + '/inbox.js'))).status, 401);
 });

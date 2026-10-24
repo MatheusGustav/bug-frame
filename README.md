@@ -2,9 +2,9 @@
 
 [![CI](https://github.com/vmatheus3/bug-frame/actions/workflows/ci.yml/badge.svg)](https://github.com/vmatheus3/bug-frame/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-c2410c.svg)](LICENSE)
-[![Download](https://img.shields.io/badge/download-v0.4.0-c2410c.svg)](https://github.com/vmatheus3/bug-frame/releases/tag/v0.4.0)
+[![Download](https://img.shields.io/badge/download-v0.4.1-c2410c.svg)](https://github.com/vmatheus3/bug-frame/releases/tag/v0.4.1)
 
-![Bugframe: frame the bug and send the context](docs/images/bugframe-overview.png)
+![Bugframe developer inbox: screenshot evidence, request progress, and a language selector](docs/images/bugframe-overview.png)
 
 **Point to anything you want to improve.** Bugframe is a small drop-in website feedback tool for bugs, content changes, design improvements, and new ideas. Customers frame an area, describe the change, and review the result. Developers get screenshots and technical context in a private inbox. Every request includes a screenshot of the marked area, page link, screen size, and element context. Optional console capture adds recent errors for debugging.
 
@@ -19,7 +19,7 @@ you cover any hosting you choose and any optional AI service you use to fix repo
   drag a box, type  ─────▶   region.png + full.png  ───▶  bug-reports/<id>/   ───▶   bugframe export
                               + url, viewport,             report.json                 → WORKLIST.md (by page)
                                 element path, console      region.png                  → developer delivers for review
-  "My requests" ◀──────────── status + review note  ◀─────────  full.png                   bugframe close <id> --note …
+  "My requests" ◀──────────── status + review note  ◀─────────  full.png                   bugframe ready <id> --note …
 ```
 
 ## How it works
@@ -29,12 +29,32 @@ you cover any hosting you choose and any optional AI service you use to fix repo
 3. Developers review the context, make the agreed change, and mark it ready for customer review.
 4. The original customer chooses **Looks good** or requests an adjustment. Only that customer can approve their request.
 
-| Frame the problem | Describe it and send |
+| 1. Frame anything to improve | 2. Describe the change |
 | --- | --- |
-| ![Select the wrong invoice total](docs/images/frame-the-problem.png) | ![Describe the problem and send the report](docs/images/describe-and-send.png) |
+| ![Select a website headline using the actual feedback widget](docs/images/frame-the-problem.png) | ![Send a content suggestion with current and proposed wording](docs/images/describe-and-send.png) |
 
-These images are illustrative mockups of the workflow on a fictional website, generated with the built-in imagegen tool.
-The runnable demo below uses the actual widget. Image files and the final generation prompts are in [docs/MOCKUPS.md](docs/MOCKUPS.md).
+| 3. Invite an approved customer | 4. Review the delivered change |
+| --- | --- |
+| ![Secure customer invitation using the website’s existing verified login](docs/images/customer-invitation.png) | ![Customer review: check the updated page, approve, or request an adjustment](docs/images/customer-review.png) |
+
+These are **screenshots of the running interface**, using a fictional Northstar Studio website and disposable local accounts. They replace the older illustrative mockups. The demonstration actually updates the example headline before requesting approval. See [the screenshot gallery and reproduction instructions](docs/MOCKUPS.md).
+
+## English, español, português
+
+The feedback widget, developer inbox, invitation page, and customer review page support English, Spanish, and Portuguese. Buttons, field labels, status names, dates, validation, and success/error messages follow the chosen language. Each portal page has a language selector that keeps entered notes and the pending invitation intact.
+
+```js
+init({ endpoint: '/api/bugframe', locale: 'auto' }); // or 'en', 'es', 'pt'
+createInbox({ bugframe: bf, locale: 'auto', siteName: 'My website' });
+```
+
+`auto` uses the browser language, with English as the fallback. The portal negotiates `Accept-Language` on the server; `?lang=en`, `?lang=es`, or `?lang=pt` selects a shareable page language. The selector remembers the choice in `bugframe:locale` for this browser and same-origin widgets using `auto`. An explicit widget `locale` takes precedence. Existing `strings` and inbox `labels` overrides remain available.
+
+| English | Español | Português |
+| --- | --- | --- |
+| ![English customer review interface](docs/images/customer-review.png) | ![Interfaz de revisión del cliente en español](docs/images/customer-review-es.png) | ![Interface de revisão do cliente em português](docs/images/customer-review-pt.png) |
+
+Customer-written feedback, developer notes, project names, and the reviewed website’s own content stay as entered; switching languages does not automatically translate or overwrite them. Your website supplies its own sign-in experience.
 
 ## Why
 
@@ -70,11 +90,11 @@ node src/cli/bin.mjs --dir ./examples/plain-html/reports close <id> --note "Fixe
 
 ### Add it to your own project
 
-Install the built package from the [GitHub release](https://github.com/vmatheus3/bug-frame/releases/tag/v0.4.0).
+Install the built package from the [GitHub release](https://github.com/vmatheus3/bug-frame/releases/tag/v0.4.1).
 This installation does not depend on a package named `bugframe` being published to the npm registry:
 
 ```bash
-npm install https://github.com/vmatheus3/bug-frame/releases/download/v0.4.0/bugframe-0.4.0.tgz
+npm install https://github.com/vmatheus3/bug-frame/releases/download/v0.4.1/bugframe-0.4.1.tgz
 # First connect your server-side login verifier as described under "Access control" below.
 npx bugframe serve --dir ./bug-reports --port 4455 --auth-module ./bugframe-auth.mjs
 ```
@@ -332,9 +352,9 @@ createServer((req, res) => inbox.matches(req.url) ? review(req, res) : api(req, 
 ```
 
 The inbox lists reports, shows selected/full screenshots and captured page context/browser errors, and lets admins update
-status with a fix note. Report text is rendered as text, not HTML. The administrator page at `/bugs/` requires admin access. Approved customers use `/bugs/review` to see their own requests, screenshots, and progress without technical logs or administrative controls. Shared UI assets require approved access, and the API rechecks authorization for every request. Pages use no-store caching, a restricted CSP, and noindex.
+status with a fix note. Report text is rendered as text, not HTML. The administrator page at `/bugs/` requires admin access. Approved customers use `/bugs/review` to see their own requests, screenshots, and progress without technical logs or administrative controls. Application JavaScript requires approved access; static styles and translation helpers are public for the invitation shell, and the API rechecks authorization for every request. Pages use no-store caching, a restricted CSP, and noindex.
 
-Configure `basePath`, the same-origin `apiBase`, `siteName`, an existing `loginUrl`, or `labels` (`refresh`, `reports`, `empty`,
+Configure `basePath`, the same-origin `apiBase`, `siteName`, an existing `loginUrl`, `locale` (`auto`, `en`, `es`, `pt`), or `labels` (`refresh`, `reports`, `empty`,
 `choose`, `selectedArea`, `fullScreenshot`, `status`, `open`, `fixed`, `wontfix`, `note`, `save`, `details`). The inbox uses
 same-origin session cookies; never embed an admin bearer token in its JavaScript. `siteUrl` links back to the reviewed website (default `/?bugs=1`). It does not supply production sign-in, email delivery, or password recovery.
 

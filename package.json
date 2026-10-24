@@ -1,6 +1,6 @@
 {
   "name": "bugframe",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "packageManager": "npm@10.9.4",
   "description": "Frame anything you want to improve. Open-source website feedback with screenshots, secure customer invitations, developer tools and customer review and approval.",
   "keywords": [
@@ -66,6 +66,7 @@
   ],
   "scripts": {
     "build": "node scripts/build.mjs",
+    "docs:images": "npm run build && node scripts/capture-docs.mjs",
     "typecheck": "tsc --noEmit",
     "test": "npm run test:unit && npm run test:server",
     "test:unit": "vitest run",

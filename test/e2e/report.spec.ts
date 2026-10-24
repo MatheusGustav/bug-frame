@@ -163,6 +163,11 @@ test('developer invites a customer, who suggests a content change, requests an a
   try {
     await customer.goto(inviteUrl);
     expect(new URL(customer.url()).hash).toBe('');
+    await customer.locator('#language').selectOption('es');
+    await expect(customer.getByRole('button', { name: 'Aceptar invitación', exact: true })).toBeVisible();
+    await customer.locator('#language').selectOption('pt');
+    await expect(customer.getByRole('button', { name: 'Aceitar convite', exact: true })).toBeVisible();
+    await customer.locator('#language').selectOption('en');
     await customer.getByRole('button', { name: 'Accept invitation' }).click();
     await expect(customer.getByRole('status')).toContainText('Sign in');
     await signIn(customer, 'e2e-customer-password');
@@ -222,3 +227,41 @@ test('developer invites a customer, who suggests a content change, requests an a
     expect((await customer.request.get(`/api/bugframe/reports/${id}/region.png`)).status()).toBe(401);
   } finally { await customerContext.close(); }
 });
+
+for (const [locale, statusLabel, saveLabel, saved, approval, approved, invitationHeading] of [
+  ['en', 'Status', 'Save status', 'Status saved.', 'Looks good', 'Approved. Thank you!', 'Customer invitations'],
+  ['es', 'Estado', 'Guardar estado', 'Estado guardado.', 'Está bien', 'Aprobado. ¡Gracias!', 'Invitaciones de clientes'],
+  ['pt', 'Status', 'Salvar status', 'Status salvo.', 'Está bom', 'Aprovado. Obrigado!', 'Convites de clientes'],
+]) {
+  test(`${locale}: developer and customer copy, validation, approval and drafts follow the selected language`, async ({ page, browser }) => {
+    const { PNG_URL } = await import('../helpers.mjs');
+    const description = `Language workflow ${locale}`;
+    const created = await page.request.post('/api/bugframe/reports', { data: { description, kind: 'content', currentText: 'Before', suggestedText: 'After', region: PNG_URL, full: PNG_URL, context: { url: 'http://127.0.0.1:4455/' } } });
+    const { id } = await created.json();
+    await signIn(page, 'e2e-admin-password'); await page.goto(`/bugs/?lang=${locale}`);
+    await expect(page.locator('html')).toHaveAttribute('lang', locale);
+    await expect(page.locator('#invitations-panel summary')).toHaveText(invitationHeading);
+    await page.locator('#reports button').filter({ hasText: description }).click();
+    await page.locator('#note').fill('Unsaved developer note');
+    await page.locator('#status').selectOption('in_progress');
+    await page.locator('#language').selectOption(locale === 'es' ? 'pt' : 'es');
+    await expect(page.locator('#note')).toHaveValue('Unsaved developer note'); await expect(page.locator('#status')).toHaveValue('in_progress');
+    await page.locator('#language').selectOption(locale);
+    await page.getByLabel(statusLabel, { exact: true }).selectOption('ready_for_review');
+    await page.getByRole('button', { name: saveLabel, exact: true }).click(); await expect(page.getByRole('status')).toHaveText(saved);
+    const context = await browser.newContext({ locale }); const customer = await context.newPage();
+    try {
+      await signIn(customer); await customer.goto(`/bugs/review?lang=${locale}`);
+      await customer.locator('#reports button').filter({ hasText: description }).click();
+      await customer.locator('#request-changes').click();
+      await expect(customer.getByRole('status')).toHaveText({ en: 'Describe what still needs adjustment.', es: 'Describe qué falta ajustar.', pt: 'Descreva o que ainda precisa de ajuste.' }[locale]!);
+      await customer.locator('#adjustment').fill('Keep this customer draft');
+      await customer.locator('#language').selectOption(locale === 'pt' ? 'es' : 'pt');
+      await expect(customer.locator('#adjustment')).toHaveValue('Keep this customer draft');
+      await customer.locator('#language').selectOption(locale);
+      await customer.getByRole('button', { name: approval, exact: true }).click(); await expect(customer.getByRole('status')).toHaveText(approved);
+      await customer.locator('#language').selectOption(locale === 'es' ? 'en' : 'es');
+      await expect(customer.getByRole('status')).not.toHaveText(approved);
+    } finally { await context.close(); }
+  });
+}

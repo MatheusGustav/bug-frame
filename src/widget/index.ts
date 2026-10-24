@@ -2,7 +2,7 @@ import { ApiError, fetchThumb, listReports, reviewReport, sendReport, type ApiCo
 import { captureViewport, cropImage, maskImage, maskRects, selectorList } from './capture';
 import { buildContext, installConsoleCapture } from './context';
 import { resolveEnabled, setStored } from './enabled';
-import { resolveStrings } from './i18n';
+import { resolveLocale, resolveStrings } from './i18n';
 import { CSS_TEXT } from './styles';
 import { dataUrlToBytes, makeZip } from './zip';
 import type { BugframeInstance, FeedbackKind, InitOptions, Rect, ReportStatus, ReportSummary, Strings } from './types';
@@ -268,9 +268,10 @@ class Bugframe implements BugframeInstance {
   private render() {
     if (!this.root) return;
     const root = this.root;
+    this.t = resolveStrings(this.o.locale, this.o.strings);
     root.replaceChildren(h('style', {}, CSS_TEXT));
     const scheme = this.o.colorScheme ?? 'auto';
-    const shell = h('div', { class: 'bf', 'data-scheme': scheme });
+    const shell = h('div', { class: 'bf', lang: resolveLocale(this.o.locale), 'data-scheme': scheme });
     if (this.o.accent) shell.style.setProperty('--bf-accent', this.o.accent);
     if (this.o.zIndex !== undefined) shell.style.setProperty('--bf-z', String(this.o.zIndex));
     root.append(shell);
