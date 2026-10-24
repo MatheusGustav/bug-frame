@@ -23,6 +23,8 @@ test('remote list/show/status commands use the same hosted API, never a local fo
   assert.equal(shown.images.region, `${config.endpoint}/reports/${id}/region.png`);
   assert.match(await remoteCommand('close', id, { ...options, note: 'Deployed and verified' }), /marked fixed/);
   assert.match(await remoteCommand('reopen', id, options), /reopened/);
+  assert.match(await remoteCommand('ready', id, { ...options, note: 'Please check the deployed update' }), /ready for customer review/);
+  assert.deepEqual(JSON.parse(calls[4].options.body), { status: 'ready_for_review', note: 'Please check the deployed update' });
   for (const { url, options } of calls) {
     assert.ok(url.startsWith(config.endpoint)); assert.equal(options.headers.authorization, 'Bearer private-test-credential');
     assert.equal(options.redirect, 'manual'); assert.ok(options.signal);
@@ -38,6 +40,7 @@ test('remote validation refuses insecure URLs, invalid ids, missing fix notes an
     await assert.rejects(() => remoteCommand('list', undefined, { ...options, endpoint }), /HTTPS/);
   }
   await assert.rejects(() => remoteCommand('show', '../secret', options), /valid report id/);
+  await assert.rejects(() => remoteCommand('ready', id, options), /requires --note/);
   await assert.rejects(() => remoteCommand('close', id, options), /requires --note/);
   await assert.rejects(() => remoteCommand('export', undefined, options), /supports list/);
   await assert.rejects(() => remoteCommand('list', undefined, { ...options, timeoutMs: NaN }), /timeout/);

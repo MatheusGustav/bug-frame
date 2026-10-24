@@ -44,6 +44,11 @@ test('list, show, export, close, reopen end to end', async () => {
   assert.match(await run(dir, 'export', '--all', '--out', join(dir, 'ALL.md')), /3 reports/);
   assert.match(await run(dir, 'reopen', a), /reopened/);
   assert.equal((await run(dir, 'list', '--open')).split('\n').length, 2);
+  assert.match(await run(dir, 'ready', a, '--note', 'Updated and deployed. Please review.'), /ready for customer review/);
+  assert.equal(JSON.parse(await run(dir, 'show', a, '--json')).reviewVersion, 1);
+  assert.match(await run(dir, 'ready', a, '--note', 'Second delivery'), /ready for customer review/);
+  assert.equal(JSON.parse(await run(dir, 'show', a, '--json')).reviewVersion, 2);
+  assert.match(await run(dir, 'export'), /1 report/); // waiting reviews are excluded from the coding worklist
   void c; await cleanup(dir);
 });
 

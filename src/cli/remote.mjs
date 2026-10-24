@@ -2,7 +2,7 @@ import { lstat, readFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { CliError } from './commands.mjs';
-import { ID_RE } from '../server/util.mjs';
+import { ID_RE, isOpen } from '../server/util.mjs';
 import { oneLine } from './worklist.mjs';
 
 export async function remoteCredentials(file, env = process.env) {
@@ -27,7 +27,7 @@ export async function remoteCredentials(file, env = process.env) {
 }
 
 export async function remoteCommand(command, id, { endpoint, token, timeoutMs = 30000, json = false, open = false, note, status = 'fixed', fetch: request = globalThis.fetch } = {}) {
-  if (!['list', 'show', 'close', 'reopen'].includes(command)) throw new CliError('Remote mode supports list, show, close and reopen only.');
+  if (!['list', 'show', 'close', 'ready', 'reopen'].includes(command)) throw new CliError('Remote mode supports list, show, close, ready and reopen only.');
   let base;
   try { base = new URL(endpoint); } catch { throw new CliError('Use a valid HTTPS remote API URL.'); }
   if (base.protocol !== 'https:' || base.username || base.password || base.search || base.hash) throw new CliError('Remote URLs must use HTTPS without embedded credentials, query strings or fragments.');
@@ -35,14 +35,16 @@ export async function remoteCommand(command, id, { endpoint, token, timeoutMs = 
   if (typeof token !== 'string' || !token || /[^\x21-\x7e]/.test(token)) throw new CliError('A private admin credential is required.');
   if (command !== 'list' && !ID_RE.test(id ?? '')) throw new CliError('A valid report id is required.');
   if (command === 'close' && (!note?.trim() || !['fixed', 'wontfix'].includes(status))) throw new CliError('close requires --note "what changed" and --status fixed or wontfix.');
+  if (command === 'ready' && !note?.trim()) throw new CliError('ready requires --note "what changed and what to review".');
+  const targetStatus = command === 'ready' ? 'ready_for_review' : command === 'reopen' ? 'open' : status;
   const route = command === 'list' ? '/reports?all=1' : `/reports/${id}`;
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const options = { redirect: 'manual', signal: controller.signal, headers: { authorization: `Bearer ${token}`, accept: 'application/json' } };
-    if (command === 'close' || command === 'reopen') {
+    if (command === 'close' || command === 'ready' || command === 'reopen') {
       options.method = 'PATCH'; options.headers['content-type'] = 'application/json';
-      options.body = JSON.stringify({ status: command === 'reopen' ? 'open' : status, note: command === 'reopen' ? '' : note.trim() });
+      options.body = JSON.stringify({ status: targetStatus, note: command === 'reopen' ? '' : note.trim() });
     }
     const response = await request(base.href.replace(/\/$/, '') + route, options);
     if (response.status >= 300 && response.status < 400) throw new CliError('Remote redirects are refused. Use the final HTTPS API URL.');
@@ -59,15 +61,15 @@ export async function remoteCommand(command, id, { endpoint, token, timeoutMs = 
     const result = JSON.parse(Buffer.concat(chunks).toString('utf8'));
     if (command === 'list') {
       if (!Array.isArray(result.reports)) throw new CliError('The remote API returned an invalid report list.');
-      const reports = result.reports.filter(r => !open || r.status === 'open');
+      const reports = result.reports.filter(r => !open || isOpen(r.status));
       return json ? JSON.stringify(reports, null, 2) : reports.map(oneLine).join('\n') || 'No bug reports.';
     }
     if (command === 'show') {
       if (result.id !== id) throw new CliError('The remote API returned a different report.');
       return JSON.stringify({ ...result, images: { region: `${base.href.replace(/\/$/, '')}/reports/${id}/region.png`, full: `${base.href.replace(/\/$/, '')}/reports/${id}/full.png` } }, null, 2);
     }
-    if (result.id !== id || result.status !== (command === 'reopen' ? 'open' : status)) throw new CliError('The remote API returned an unexpected status update.');
-    return json ? JSON.stringify(result, null, 2) : `${id} ${command === 'reopen' ? 'reopened' : `marked ${status}`}`;
+    if (result.id !== id || result.status !== targetStatus) throw new CliError('The remote API returned an unexpected status update.');
+    return json ? JSON.stringify(result, null, 2) : `${id} ${command === 'reopen' ? 'reopened' : command === 'ready' ? 'ready for customer review' : `marked ${status}`}`;
   } catch (error) {
     if (error instanceof CliError) throw error;
     throw new CliError(controller.signal.aborted ? 'Remote request timed out.' : 'Remote request failed or returned invalid JSON.');

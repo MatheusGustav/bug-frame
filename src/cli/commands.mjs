@@ -1,7 +1,7 @@
 import { mkdir, writeFile, readFile } from 'node:fs/promises';
 import { join, resolve, basename } from 'node:path';
 import { createFileStorage } from '../server/storage-fs.mjs';
-import { ID_RE, FILE_NAMES, cleanContext, isPng, text } from '../server/util.mjs';
+import { FEEDBACK_KINDS, ID_RE, FILE_NAMES, isOpen, isActionable, cleanContext, isPng, text } from '../server/util.mjs';
 import { buildWorklist, oneLine, showText } from './worklist.mjs';
 import { readZip } from './zip-read.mjs';
 
@@ -10,7 +10,7 @@ export class CliError extends Error {}
 export function openStore(dir) { return createFileStorage({ dir }); }
 
 export async function cmdList(dir, { open = false, json = false } = {}) {
-  const rows = (await openStore(dir).list()).filter(r => !open || r.status === 'open');
+  const rows = (await openStore(dir).list()).filter(r => !open || isOpen(r.status));
   if (json) return JSON.stringify(rows, null, 2);
   if (!rows.length) return open ? 'No open bug reports.' : 'No bug reports.';
   return rows.map(oneLine).join('\n');
@@ -23,7 +23,7 @@ export async function cmdShow(dir, id, { json = false } = {}) {
 }
 
 export async function cmdExport(dir, { all = false, out, now } = {}) {
-  const rows = (await openStore(dir).list()).filter(r => all || r.status === 'open');
+  const rows = (await openStore(dir).list()).filter(r => all || isActionable(r.status));
   const target = resolve(out ?? join(dir, 'WORKLIST.md'));
   await mkdir(join(target, '..'), { recursive: true });
   const body = buildWorklist(rows, { dir: resolve(dir), out: target, label: all ? 'total' : 'open', now });
@@ -38,6 +38,19 @@ export async function cmdClose(dir, id, { note, status = 'fixed' } = {}) {
   const r = await openStore(dir).update(id, { status, note: text(note, 2000), closedAt: new Date().toISOString() });
   if (!r) throw new CliError(`No report with id ${id} in ${resolve(dir)}`);
   return `${id} marked ${status}`;
+}
+
+/** Deliver verified work to its original reporter without claiming customer approval. */
+export async function cmdReady(dir, id, { note } = {}) {
+  if (!note || !String(note).trim()) throw new CliError('ready needs --note "what changed and what to review"');
+  if (!ID_RE.test(id)) throw new CliError(`Not a report id: ${id}`);
+  const store = openStore(dir), current = await store.get(id);
+  if (!current) throw new CliError(`No report with id ${id} in ${resolve(dir)}`);
+  const at = new Date().toISOString(), message = text(note, 2000).trim();
+  await store.update(id, { status: 'ready_for_review', note: message, closedAt: null, reviewVersion: (current.reviewVersion ?? 0) + 1,
+    activity: [...(current.activity ?? []), { status: 'ready_for_review', note: message, at, by: 'developer' }].slice(-100),
+  });
+  return `${id} ready for customer review`;
 }
 
 export async function cmdReopen(dir, id) {
@@ -62,7 +75,7 @@ export async function cmdImport(dir, zipPath) {
     try {
       if (!f['report.json'] || !isPng(f['region.png']) || !isPng(f['full.png'])) throw new Error('incomplete or not PNG');
       const raw = JSON.parse(f['report.json'].toString('utf8'));
-      const report = { id, status: 'open', note: '', createdAt: text(raw.createdAt, 40) || new Date().toISOString(), reporter: 'imported', description: text(raw.description, 4000).trim(), types: (Array.isArray(raw.types) ? raw.types : []).slice(0, 8).map(t => text(t, 40)), context: cleanContext(raw.context), files: { region: 'region.png', full: 'full.png' } };
+      const report = { id, status: 'open', note: '', createdAt: text(raw.createdAt, 40) || new Date().toISOString(), reporter: 'imported', description: text(raw.description, 4000).trim(), kind: FEEDBACK_KINDS.includes(raw.kind) ? raw.kind : 'bug', currentText: text(raw.currentText, 2000), suggestedText: text(raw.suggestedText, 2000), types: (Array.isArray(raw.types) ? raw.types : []).slice(0, 8).map(t => text(t, 40)), context: cleanContext(raw.context), files: { region: 'region.png', full: 'full.png' } };
       if (!report.description) throw new Error('no description');
       await store.create(report, { region: f['region.png'], full: f['full.png'] });
       imported.push(id);

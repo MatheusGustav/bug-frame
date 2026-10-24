@@ -6,10 +6,10 @@ import { resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { createBugframe } from '../server/handler.mjs';
 import { toNodeListener } from '../server/node.mjs';
-import { CliError, cmdClose, cmdExport, cmdImport, cmdList, cmdReopen, cmdShow } from './commands.mjs';
+import { CliError, cmdClose, cmdExport, cmdImport, cmdList, cmdReady, cmdReopen, cmdShow } from './commands.mjs';
 import { remoteCommand, remoteCredentials } from './remote.mjs';
 
-const HELP = `bugframe - collect screenshot bug reports and hand them to a person or an AI agent
+const HELP = `bugframe - collect visual feedback and hand them to a person or an AI agent
 
 Usage: bugframe [--dir ./bug-reports] <command> [options]
 
@@ -18,6 +18,7 @@ Commands:
   show <id> [--json]                   everything recorded for one report
   export [--all] [--out WORKLIST.md]   write the grouped work list (open reports unless --all)
   close <id> --note "..." [--status fixed|wontfix]
+  ready <id> --note "what changed and what to review"
   reopen <id>
   import <report.zip>                  unpack a report downloaded from a backend-less page
   serve [--port 4455] [--origin URL]... [--auth-module FILE] [--admin-token T] [--webhook URL] [--webhook-secret S]
@@ -26,7 +27,7 @@ Commands:
 
 Options:
   --dir <folder>   reports folder (env BUGFRAME_DIR, default ./bug-reports)
-  --remote <HTTPS URL>   operate on a hosted API (list/show/close/reopen); excludes --dir
+  --remote <HTTPS URL>   operate on a hosted API (list/show/close/ready/reopen); excludes --dir
   --credentials <file>  private JSON file containing adminToken (or BUGFRAME_ADMIN_TOKEN)
   --timeout <ms>        remote request timeout, default 30000
   -h, --help       this text          -v, --version   print the version
@@ -48,7 +49,7 @@ async function main(argv) {
   const need = () => { if (!arg) throw new CliError(`${cmd} needs an id`); return arg; };
   if (values.remote) {
     if (values.dir) throw new CliError('--remote and --dir cannot be combined.');
-    if (!['list', 'show', 'close', 'reopen'].includes(cmd)) throw new CliError('Remote mode supports list, show, close and reopen only.');
+    if (!['list', 'show', 'close', 'ready', 'reopen'].includes(cmd)) throw new CliError('Remote mode supports list, show, close, ready and reopen only.');
     const token = await remoteCredentials(values.credentials);
     return remoteCommand(cmd, arg, { endpoint: values.remote, token, timeoutMs: Number(values.timeout ?? 30000), json: values.json, open: values.open, note: values.note, status: values.status });
   }
@@ -58,6 +59,7 @@ async function main(argv) {
     case 'show': return cmdShow(dir, need(), { json: values.json });
     case 'export': return (await cmdExport(dir, { all: values.all, out: values.out })).message;
     case 'close': return cmdClose(dir, need(), { note: values.note, status: values.status });
+    case 'ready': return cmdReady(dir, need(), { note: values.note });
     case 'reopen': return cmdReopen(dir, need());
     case 'import': return (await cmdImport(dir, need())).message;
     case 'serve': {
