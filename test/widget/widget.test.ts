@@ -47,7 +47,7 @@ describe('mounting', () => {
     const chat = document.getElementById('chat')!; chat.getBoundingClientRect = () => ({ left: window.innerWidth - 70, right: window.innerWidth - 10, top: window.innerHeight - 70, bottom: window.innerHeight - 10, width: 60, height: 60, x: 0, y: 0, toJSON() {} });
     make({ avoid: ['#chat'] }); expect(parseInt(q('.fab-wrap')!.style.getPropertyValue('--bf-ey'))).toBeGreaterThan(40);
   });
-  it('uses the localized strings', () => { make({ locale: 'pt' }); expect(q('.fab')!.getAttribute('aria-label')).toBe('Deixar feedback'); });
+  it('uses the localized strings', () => { make({ locale: 'pt' }); expect(q('.bf')!.getAttribute('lang')).toBe('pt'); expect(q('.fab')!.getAttribute('aria-label')).toBe('Deixar feedback'); });
 });
 
 describe('accessibility', () => {

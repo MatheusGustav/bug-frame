@@ -109,7 +109,7 @@ const es: Strings = {
   sentBody: 'Está en tu lista con su estado.',
   sentDownloaded: 'El informe se guardó como archivo. Envíalo a quien mantiene esta página.',
   sendFailed: 'No se pudo enviar el informe. Tu descripción se conserva, inténtalo de nuevo.',
-  accessDenied: 'Inicia sesión con una cuenta autorizada para informar de problemas e inténtalo de nuevo.',
+  accessDenied: 'Inicia sesión con una cuenta autorizada para dejar comentarios e inténtalo de nuevo.',
   downloadInstead: 'Descargar como archivo',
   statusOpen: 'Enviado',
   statusFixed: 'Arreglado',
@@ -168,7 +168,7 @@ const pt: Strings = {
   sentBody: 'Está na sua lista com o status.',
   sentDownloaded: 'O relato foi salvo como arquivo. Envie para quem cuida desta página.',
   sendFailed: 'Não foi possível enviar o relato. Sua descrição foi mantida, tente de novo.',
-  accessDenied: 'Entre com uma conta autorizada a relatar problemas e tente novamente.',
+  accessDenied: 'Entre com uma conta autorizada a deixar feedback e tente novamente.',
   downloadInstead: 'Baixar como arquivo',
   statusOpen: 'Enviado',
   statusFixed: 'Corrigido',
@@ -179,9 +179,20 @@ const pt: Strings = {
 
 export const LOCALES: Record<string, Strings> = { en, es, pt };
 
-export function resolveStrings(locale: string | undefined, overrides: Partial<Strings> | undefined): Strings {
+export function resolveLocale(locale: string | undefined): string {
   let code = (locale ?? 'auto').toLowerCase();
-  if (code === 'auto') code = (typeof navigator !== 'undefined' ? navigator.language : 'en').toLowerCase();
-  const base = LOCALES[code] ?? LOCALES[code.split('-')[0]] ?? en;
-  return { ...base, ...(overrides ?? {}) };
+  if (code === 'auto') {
+    let preferred: string | null = null;
+    if (typeof window !== 'undefined') {
+      const query = new URL(window.location.href).searchParams.get('lang');
+      if (query && Object.hasOwn(LOCALES, query)) preferred = query;
+      else { try { const saved = localStorage.getItem('bugframe:locale'); if (saved && Object.hasOwn(LOCALES, saved)) preferred = saved; } catch { /* optional preference */ } }
+    }
+    code = (preferred ?? (typeof navigator !== 'undefined' ? navigator.language : 'en')).toLowerCase();
+  }
+  return Object.hasOwn(LOCALES, code) ? code : Object.hasOwn(LOCALES, code.split('-')[0]) ? code.split('-')[0] : 'en';
+}
+
+export function resolveStrings(locale: string | undefined, overrides: Partial<Strings> | undefined): Strings {
+  return { ...LOCALES[resolveLocale(locale)], ...(overrides ?? {}) };
 }
