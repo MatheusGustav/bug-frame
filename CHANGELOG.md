@@ -3,6 +3,26 @@
 All notable changes are listed here. The format follows [Keep a Changelog](https://keepachangelog.com/) and the project
 uses [Semantic Versioning](https://semver.org/).
 
+## [0.4.0] - 2026-10-23
+
+### Added
+- Broader feedback kinds: bugs, content changes, design improvements, and ideas. Content requests can include current and suggested wording. The customer widget uses friendly feedback/request language in English, Spanish, and Portuguese.
+- Optional customer invitations in the developer inbox, bound to verified host-account email and then stable account identity. One-use random secrets are stored hashed, links use fragments, access expires (default 7, maximum 30 days), and admins can revoke it immediately for subsequent requests.
+- Separate customer request page at `/bugs/review`, showing only the reporter's own feedback, screenshots, developer updates, and review controls; technical context and invitation management remain in the developer view.
+- Reviewed, in-progress, ready-for-review, adjustment-requested, and customer-approved statuses with a bounded progress history. Only the original reporter can approve a current delivery; stale or duplicate responses are refused.
+- Local and remote `bugframe ready <id> --note "what changed"` commands. Coding worklists include content/review context and exclude deliveries already waiting for customer review.
+
+### Changed / upgrade notes
+- Upgrade server and widget together. Old report files and `open`/`fixed`/`wontfix` remain compatible; update custom status consumers/adapters for the expanded statuses and retain the new fields. `fixed` remains a developer resolution, not customer approval.
+- Default type chips are replaced by the four feedback kinds; `types` still supplies optional extra tags. Existing text overrides remain available.
+- Invitations are opt-in and use the website's existing verified sign-in system; they do not supply accounts, email delivery, or password recovery. Use `role: 'user'` for invitation-only customers. Existing `client` permissions remain controlled by the host.
+- Invitation consumption and review updates require one API process/writer per project, including custom stores. Multi-replica mutation coordination is not supplied in this version; use shared gateway limits where appropriate.
+
+### Security
+- Recheck invitation membership, expiry, and the host login on each API request. Deny unverified/mismatched emails, replayed invitation secrets, and unauthorized invitation management or review actions.
+- Serialize review mutations within an instance and require the delivered review version. Clear private browser previews after authorization failures/page exit and ignore stale list responses.
+- Same-origin checks now compare the full origin, including its scheme.
+
 ## [0.3.0] - 2026-10-23
 
 ### Added

@@ -47,6 +47,20 @@ report API on the same origin. The API requires `application/json` and rejects u
 framework needs an additional CSRF token, send it with the widget's custom `fetch` and verify it in `authorize`.
 Origin restrictions are an additional browser control; they do not authenticate a user.
 
+## Invitation-only customers (0.4.0)
+
+Set `invitations: true` alongside `dir`, then return this for an ordinary authenticated, active customer:
+
+```js
+return { id: String(user.id), role: 'user', email: user.email, emailVerified: user.emailVerified === true };
+```
+
+The website must verify that session and email ownership; Bugframe does not create accounts or verify emails. `user` has no reporting permission before accepting an admin-created invitation addressed to that verified email. After acceptance, the account may submit and view its own requests until expiry/revocation. The host login is still checked on every request. Continue returning `user` after acceptance; converting it to `client` would grant independent permission that invitation revocation cannot remove.
+
+Mount `createInbox({ bugframe: bf, loginUrl: '/login', siteName: 'My website' })`. Admins create/revoke invitations at `/bugs/`, customers accept at the supplied `/bugs/invite#token=...` link, and approved customers follow and review their requests at `/bugs/review`. Send links through your usual private channel; there is no built-in email sender. One active invitation per email; default access lifetime 7 days, maximum 30, including accepted invitations. Revoke first to replace an invitation. Keep one instance/store per website/tenant and use one server process per filesystem store.
+
+See the [complete workflow and upgrade guide](../../README.md#customer-invitations-and-approvals-040).
+
 ## Standalone CLI or framework examples
 
 Put only the `authorize` function and your session-service import in `bugframe-auth.mjs`, then run:

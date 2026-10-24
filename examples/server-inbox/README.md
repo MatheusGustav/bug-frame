@@ -16,7 +16,7 @@ HOST=127.0.0.1 PORT=4455 node examples/server-inbox/server.mjs
 
 The auth module exports `authorize(request)` and verifies your application's existing login session and current permissions;
 see [authentication](../authentication/README.md). Set `BUGFRAME_LOGIN_URL=/your-login` for the inbox's sign-in link and
-`BUGFRAME_SITE_NAME` for its title. Approved accounts can report, while only admins can open `/bugs/` and update statuses.
+`BUGFRAME_SITE_NAME` for its title. Approved accounts can report, while only admins can open `/bugs/` and manage progress or invitations. With an auth module, invitations are enabled: return `role: 'user'` plus verified account email for invitation-only customers. Approved customers use `/bugs/review`; the invitation shell is `/bugs/invite`. Account creation, email verification, and sign-in remain part of your application.
 Use a same-origin HTTPS reverse proxy for `/api/bugframe`, `/bugs`, and the application's cookie/session handling. This
 example serves only its own demo/login assets; integrate its handlers before your framework's static-site handler, never
 mount the private data directory as a static folder. `BUGFRAME_ADMIN_TOKEN` optionally enables private remote agent access.
@@ -54,6 +54,7 @@ BUGFRAME_DATA_DIR/
   owner-access.json          optional generated owner credential; private
   reports/<id>/report.json   description, context, status and note
   reports/<id>/region.png    selected area
+  reports/.invitations/      private email-bound invitation records (hashes, never raw invitation tokens)
   reports/<id>/full.png      captured viewport
   events.ndjson             report-created id/timestamp events (no descriptions, keys or screenshots)
 ```
@@ -61,7 +62,7 @@ BUGFRAME_DATA_DIR/
 Keep this folder on a persistent volume outside release/build directories so deployments replace code without deleting
 reports. New directories/files use 0700/0600; existing permissions are not silently rewritten, so check them before reusing
 an older folder. The filesystem CLI uses `--dir "$BUGFRAME_DATA_DIR/reports"`; remote agents use the hosted API instead.
-Back up the entire private data folder separately from source deployments. Encrypt and restrict backups, set an appropriate
+Use one server process/writer per directory for invitation and review coordination. Back up the entire private data folder separately from source deployments. Encrypt and restrict backups, set an appropriate
 retention period for reports/images/event logs, and remove expired data/backups according to your own retention policy.
 Reports already loaded in a browser cannot be recalled; sign-out should destroy the widget and refresh open inboxes.
 
