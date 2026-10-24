@@ -24,14 +24,14 @@ async function dragOver(page: Page, selector: string) {
 
 test('drag a box, describe, send: the report lands on disk and the CLI exports it', async ({ page }) => {
   await openMenu(page);
-  await page.getByRole('menuitem', { name: /Report a problem on this page/ }).click();
+  await page.getByRole('menuitem', { name: /Leave feedback on this page/ }).click();
   await expect(page.locator('.layer')).toBeVisible({ timeout: 20_000 });
   await page.evaluate(() => console.error('Demo error before report'));
   await dragOver(page, '#total');
   await expect(page.locator('.sheet')).toBeVisible();
   await expect(page.locator('.preview')).toHaveAttribute('src', /^data:image\/png/);
   await page.locator('textarea').fill('The total is wrong, it should be $1,420.00');
-  await page.locator('.chips button', { hasText: 'Wrong data' }).click();
+  await page.getByRole('button', { name: 'Something isn’t working', exact: true }).click();
   const [request] = await Promise.all([page.waitForRequest(r => r.url().endsWith('/api/bugframe/reports') && r.method() === 'POST'), page.locator('.send').click()]);
   await expect(page.locator('.sent')).toBeVisible();
 
@@ -59,12 +59,12 @@ test('drag a box, describe, send: the report lands on disk and the CLI exports i
   const region = pngSize(join(DIR, id, 'region.png')), full = pngSize(join(DIR, id, 'full.png'));
   expect(region.w).toBeLessThan(full.w); expect(region.h).toBeLessThan(full.h);
   const report = JSON.parse(readFileSync(join(DIR, id, 'report.json'), 'utf8'));
-  expect(report.description).toContain('$1,420.00'); expect(report.types).toEqual(['Wrong data']); expect(report.status).toBe('open');
+  expect(report.description).toContain('$1,420.00'); expect(report.kind).toBe('bug'); expect(report.types).toEqual([]); expect(report.status).toBe('open');
   expect(report.context.url).toContain('/?bugs=1'); expect(report.context.viewport.w).toBeGreaterThan(300);
   expect(report.context.elements.some((e: { component: string; path: string }) => e.component.includes('invoice-summary') || e.path.includes('total'))).toBe(true);
   expect(report.context.consoleErrors.some((e: { message: string }) => e.message.includes('Demo error before report'))).toBe(true);
 
-  // CLI: export a grouped worklist, close it, and see the answer in "My reports".
+  // CLI: export a grouped worklist, close it, and see the answer in "My requests".
   expect(CLI('--dir', DIR, 'export')).toMatch(/1 report/);
   const md = readFileSync(join(DIR, 'WORKLIST.md'), 'utf8');
   expect(md).toContain('The total is wrong'); expect(md).toContain(`${id}/region.png`); expect(md).toContain('## /');
@@ -81,7 +81,7 @@ test('whole screen, and the tool stays off without ?bugs=1', async ({ page }) =>
   await page.goto('/?bugs=0');
   await expect(page.locator('[data-bugframe]')).toHaveCount(0);
   await openMenu(page);
-  await page.getByRole('menuitem', { name: /Report a problem/ }).click();
+  await page.getByRole('menuitem', { name: /Leave feedback/ }).click();
   await page.getByRole('button', { name: 'Whole screen' }).click();
   await page.locator('textarea').fill('Everything looks off');
   await page.locator('.send').click();
@@ -95,7 +95,7 @@ test('whole screen, and the tool stays off without ?bugs=1', async ({ page }) =>
 test('keyboard only: open, pick a region with the arrow keys, type, send', async ({ page }) => {
   await page.goto('/?bugs=1');
   await page.locator('.fab').focus(); await page.keyboard.press('Enter');
-  await page.getByRole('menuitem', { name: /Report a problem/ }).press('Enter');
+  await page.getByRole('menuitem', { name: /Leave feedback/ }).press('Enter');
   await expect(page.locator('.layer')).toBeFocused({ timeout: 20_000 });
   await page.keyboard.press('ArrowRight'); await page.keyboard.press('Enter');
   await expect(page.locator('.sheet')).toBeVisible();
@@ -109,7 +109,7 @@ test('download mode: no backend, a .zip is saved and `bugframe import` reads it'
   await page.goto('/download.html?bugs=1');
   await page.locator('.fab').click();
   await expect(page.locator('.menu .list')).toHaveCount(0);
-  await page.getByRole('menuitem', { name: /Report a problem/ }).click();
+  await page.getByRole('menuitem', { name: /Leave feedback/ }).click();
   await page.getByRole('button', { name: 'Whole screen' }).click();
   await page.locator('textarea').fill('Static page problem');
   const [download] = await Promise.all([page.waitForEvent('download'), page.locator('.send').click()]);
@@ -127,13 +127,13 @@ test('private inbox shows safe report content and screenshots, updates status, t
   const res = await page.request.post('/api/bugframe/reports', { data: { description, region: PNG_URL, full: PNG_URL, context: { url: 'javascript:alert(1)', viewport: { w: 390, h: 844 }, consoleErrors: [{ at: 'now', message: '<script>untrusted()</script>' }] } } });
   expect(res.status()).toBe(201); const { id } = await res.json();
   await page.goto('/bugs/');
-  await page.getByRole('button', { name: `[open] ${description}`, exact: true }).click();
+  await page.locator('#reports button').filter({ hasText: description }).click();
   await expect(page.locator('#description')).toHaveText(description);
   await expect(page.locator('#description img')).toHaveCount(0);
   await expect(page.locator('#page-link')).toBeHidden();
   await expect(page.locator('#region')).toHaveAttribute('src', /^blob:/);
   await expect(page.locator('#full')).toHaveAttribute('src', /^blob:/);
-  await page.locator('summary').click(); await expect(page.locator('#context')).toContainText('<script>untrusted()</script>');
+  await page.locator('#technical summary').click(); await expect(page.locator('#context')).toContainText('<script>untrusted()</script>');
   await page.screenshot({ path: testInfo.outputPath('inbox.png'), fullPage: true });
   await page.getByLabel('Status', { exact: true }).selectOption('fixed');
   await page.getByLabel('Note for the reporter').fill('Deployed and verified');
@@ -148,4 +148,77 @@ test('private inbox shows safe report content and screenshots, updates status, t
   await expect(page.locator('#note')).toHaveValue('');
   await expect(page.getByRole('status')).toContainText('administrator session');
   expect((await page.request.get(`/api/bugframe/reports/${id}/region.png`)).status()).toBe(401);
+});
+
+test('developer invites a customer, who suggests a content change, requests an adjustment and approves the next delivery', async ({ page, browser }, testInfo) => {
+  await signIn(page, 'e2e-admin-password');
+  await page.goto('/bugs/');
+  await page.locator('#invitations-panel summary').click();
+  await page.getByLabel('Customer email').fill('customer@example.test');
+  await page.getByRole('button', { name: 'Create invitation' }).click();
+  await expect(page.locator('#invite-result')).toBeVisible();
+  const inviteUrl = await page.locator('#invite-link').inputValue();
+  expect(inviteUrl).toMatch(/\/bugs\/invite#token=[a-f0-9]{64}$/);
+  const customerContext = await browser.newContext(); const customer = await customerContext.newPage();
+  try {
+    await customer.goto(inviteUrl);
+    expect(new URL(customer.url()).hash).toBe('');
+    await customer.getByRole('button', { name: 'Accept invitation' }).click();
+    await expect(customer.getByRole('status')).toContainText('Sign in');
+    await signIn(customer, 'e2e-customer-password');
+    expect((await customer.request.post('/api/bugframe/reports', { data: {} })).status()).toBe(401);
+    await customer.goto(inviteUrl);
+    await customer.getByRole('button', { name: 'Accept invitation' }).click();
+    await expect(customer.getByRole('status')).toContainText('You’re ready');
+    await customer.getByRole('link', { name: 'Review the website' }).click();
+    await customer.locator('.fab').click(); await customer.getByRole('menuitem', { name: /Leave feedback/ }).click();
+    await customer.getByRole('button', { name: 'Whole screen' }).click();
+    await customer.getByRole('button', { name: 'Change text or an image', exact: true }).click();
+    await customer.getByLabel('What would you like to change?').fill('Please use a friendlier headline');
+    await customer.getByLabel('Current wording (optional)').fill('Invoice #4021');
+    await customer.getByLabel('Suggested wording (optional)').fill('Your project summary');
+    const sent = customer.waitForResponse(response => response.url().endsWith('/reports') && response.request().method() === 'POST');
+    await customer.getByRole('button', { name: 'Send feedback', exact: true }).click();
+    const { id } = await (await sent).json();
+    expect((await customer.request.get('/bugs/')).status()).toBe(403);
+    expect((await customer.request.get(`/api/bugframe/reports/${id}`)).status()).toBe(403);
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await page.locator('#reports button').filter({ hasText: 'Please use a friendlier headline' }).click();
+    await expect(page.locator('#suggested-text')).toHaveText('Your project summary');
+    await expect(page.locator('#region')).toHaveAttribute('src', /^blob:/);
+    await page.getByLabel('Status', { exact: true }).selectOption('in_progress');
+    await page.getByLabel('Note for the reporter').fill('We are updating the headline.');
+    await page.getByRole('button', { name: 'Save status' }).click();
+    await expect(page.getByRole('status')).toHaveText('Status saved.');
+    await page.getByLabel('Status', { exact: true }).selectOption('ready_for_review');
+    await page.getByLabel('Note for the reporter').fill('The headline was updated. Please review.');
+    await page.getByRole('button', { name: 'Save status' }).click();
+    await expect(page.locator('#activity')).toContainText('Ready for your review');
+    await customer.goto('/bugs/review');
+    await customer.locator('#reports button').filter({ hasText: 'Please use a friendlier headline' }).click();
+    await expect(customer.locator('#technical')).toBeHidden(); await expect(customer.locator('#invitations-panel')).toBeHidden();
+    await customer.getByLabel('What still needs adjustment?', { exact: false }).fill('Please make it shorter.');
+    await customer.getByRole('button', { name: 'Request an adjustment', exact: true }).click();
+    await expect(customer.getByRole('status')).toContainText('adjustment request was sent');
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await expect(page.locator('#customer-note')).toContainText('Please make it shorter.');
+    await page.getByLabel('Status', { exact: true }).selectOption('ready_for_review');
+    await page.getByLabel('Note for the reporter').fill('Shortened it. Please check the page again.');
+    await page.getByRole('button', { name: 'Save status' }).click();
+    await expect(page.locator('#resolution')).toContainText('Shortened it.');
+    await customer.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await expect(customer.locator('#review-form')).toBeVisible();
+    await customer.screenshot({ path: testInfo.outputPath('customer-review.png'), fullPage: true });
+    await customer.getByRole('button', { name: 'Looks good', exact: true }).click();
+    await expect(customer.getByRole('status')).toHaveText('Approved. Thank you!');
+    await expect(customer.locator('#review-form')).toBeHidden();
+    await page.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await expect(page.locator('#info')).toContainText('Approved');
+    const row = page.locator('#invitations li').filter({ hasText: 'customer@example.test' }).filter({ has: page.getByRole('button', { name: 'Revoke access' }) });
+    await row.getByRole('button', { name: 'Revoke access' }).click();
+    await customer.getByRole('button', { name: 'Refresh', exact: true }).click();
+    await expect(customer.locator('#detail')).toBeHidden();
+    await expect(customer.getByRole('status')).toContainText('access has expired');
+    expect((await customer.request.get(`/api/bugframe/reports/${id}/region.png`)).status()).toBe(401);
+  } finally { await customerContext.close(); }
 });

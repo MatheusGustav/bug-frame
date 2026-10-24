@@ -15,11 +15,13 @@ export function showText(r, dir) {
   const c = r.context ?? {}, vp = c.viewport ?? {};
   const lines = [`${r.id}  [${r.status}]  ${r.createdAt}`, `Page: ${pageOf(r)}`, `Link: ${c.url ?? ''}`, `Title: ${c.title ?? ''}`,
     `Viewport: ${vp.w}x${vp.h} @${vp.dpr}x   scroll: ${JSON.stringify(c.scroll)}   region: ${JSON.stringify(c.region)}`,
-    `Types: ${(r.types ?? []).join(', ') || '-'}`, '', 'What they wrote:', `  ${r.description}`, '',
+    `Feedback: ${r.kind ?? 'bug'}`, `Types: ${(r.types ?? []).join(', ') || '-'}`, '', 'What they wrote:', `  ${r.description}`, '',
     `Region picture: ${join(dir, r.id, 'region.png')}`, `Full screen:    ${join(dir, r.id, 'full.png')}`];
   if (c.elements?.length) lines.push('', 'Under the box:', ...c.elements.map(e => `  - ${e.component || '-'}  |  ${e.path}  |  "${e.text}"`));
   if (c.consoleErrors?.length) lines.push('', 'Console errors (last minute):', ...c.consoleErrors.map(e => `  - ${e.message}`));
   if (c.metadata && Object.keys(c.metadata).length) lines.push('', `App data: ${JSON.stringify(c.metadata)}`);
+  if (r.kind === 'content') lines.push('', `Current wording: ${r.currentText ?? ''}`, `Suggested wording: ${r.suggestedText ?? ''}`);
+  if (r.reviewNote) lines.push('', `Customer review: ${r.reviewNote}`);
   if (r.note) lines.push('', `Note: ${r.note}`);
   lines.push(`User agent: ${c.userAgent ?? ''}`);
   return lines.join('\n');
@@ -34,12 +36,15 @@ export function buildWorklist(reports, { dir, out, label = 'open', now = new Dat
   const rel = (id, f) => relative(dirname(out), join(dir, id, f)).split('\\').join('/');
   const o = [`# Bug work list (${reports.length} ${label} across ${groups.size} page${groups.size === 1 ? '' : 's'})`, '',
     `Generated ${stamp} by \`bugframe export\`. Each item is one person's own words with a picture of the area they marked (open the region picture first), the exact link and the state of the screen. ` +
-    'Fix every item at its root cause, prove it with a before/after picture, then close it with `bugframe close <id> --note "what changed, in plain words"`.', ''];
+    'Triage suggestions before implementing them; submission is not scope approval. Fix accepted work at its root cause, prove it with a before/after picture, then close it with `bugframe close <id> --note "what changed, in plain words"`.', ''];
   for (const page of [...groups.keys()].sort()) {
     o.push(`## ${page}`, '');
     for (const r of groups.get(page)) {
       const c = r.context ?? {}, vp = c.viewport ?? {};
       o.push(`### ${r.id}`, '', `> ${one(r.description)}`, '');
+      o.push(`- Feedback: ${r.kind ?? 'bug'}; status: ${r.status}`);
+      if (r.kind === 'content') o.push(`- Current wording: ${one(r.currentText)}`, `- Suggested wording: ${one(r.suggestedText)}`);
+      if (r.reviewNote) o.push(`- Customer review: ${one(r.reviewNote)}`);
       if (r.types?.length) o.push(`- Type: ${r.types.join(', ')}`);
       o.push(`- Link: ${c.url ?? ''}`, `- Viewport: ${vp.w}x${vp.h} at ${vp.dpr}x, scrolled to y=${c.scroll?.y ?? 0}`,
         `- Region picture: \`${rel(r.id, 'region.png')}\`  (whole screen: \`${rel(r.id, 'full.png')}\`)`);

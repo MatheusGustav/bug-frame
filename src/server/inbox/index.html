@@ -2,21 +2,32 @@
 <html lang="en">
 <head>
   <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="robots" content="noindex,nofollow"><title>{{NAME}} · Report inbox</title>
+  <meta name="robots" content="noindex,nofollow"><title>{{NAME}} · Feedback</title>
   <link rel="stylesheet" href="{{BASE}}/inbox.css"><script src="{{BASE}}/inbox.js" defer></script>
 </head>
 <body data-config="{{CONFIG}}">
-  <header><div><p class="eyebrow">PRIVATE REPORT INBOX</p><h1>{{NAME}}</h1></div><button id="refresh" data-label="refresh">Refresh</button></header>
+  <header><div><p class="eyebrow">WEBSITE FEEDBACK</p><h1>{{NAME}}</h1></div><button id="refresh" data-label="refresh">Refresh</button></header>
+  <p id="intro">Track feedback, review changes, and keep the conversation in one place.</p>
+  <p><a id="site-link" href="/">Back to the website</a></p>
   <p id="message" role="status" aria-live="polite"></p>
+  <details id="invitations-panel" hidden><summary>Customer invitations</summary>
+    <p>Invite a customer with a verified account. Access expires at the date shown, including after acceptance.</p>
+    <form id="invite-form"><label for="invite-email">Customer email</label><input id="invite-email" type="email" maxlength="254" required autocomplete="email"><label for="invite-days">Access duration (days)</label><input id="invite-days" type="number" min="1" max="30" value="7" required><button id="create-invite" type="submit">Create invitation</button></form>
+    <p id="invite-result" hidden><label for="invite-link">Copy and share this private invitation link</label><input id="invite-link" type="text" readonly><small id="invite-expiry"></small></p><ul id="invitations"></ul>
+  </details>
   <main>
-    <aside aria-labelledby="reports-title"><h2 id="reports-title" data-label="reports">Reports</h2><p id="empty" data-label="empty" hidden>No reports yet.</p><ul id="reports"></ul></aside>
+    <aside aria-labelledby="reports-title"><h2 id="reports-title" data-label="reports">Requests</h2><p id="empty" data-label="empty" hidden>No requests yet.</p><ul id="reports"></ul></aside>
     <section aria-labelledby="description">
-      <p id="choose" data-label="choose">Choose a report to review its screenshot and context.</p>
+      <p id="choose" data-label="choose">Choose a request to see its details and progress.</p>
       <div id="detail" hidden>
         <h2 id="description" tabindex="-1"></h2><p id="info"></p><a id="page-link" target="_blank" rel="noopener noreferrer" hidden>Open reported page</a>
-        <div class="screenshots"><figure><figcaption data-label="selectedArea">Selected area</figcaption><img id="region" alt="Selected problem area" hidden></figure><figure><figcaption data-label="fullScreenshot">Full screenshot</figcaption><img id="full" alt="Captured viewport" hidden></figure></div>
-        <form id="status-form"><label for="status" data-label="status">Status</label><select id="status"><option value="open" data-label="open">Open</option><option value="fixed" data-label="fixed">Fixed</option><option value="wontfix" data-label="wontfix">Won't fix</option></select><label for="note" data-label="note">Note for the reporter</label><textarea id="note" rows="3" maxlength="2000"></textarea><button id="save" type="submit" data-label="save">Save status</button></form>
-        <details><summary data-label="details">Page context and browser errors</summary><pre id="context"></pre></details>
+        <dl id="wording" hidden><dt>Current wording</dt><dd id="current-text"></dd><dt>Suggested wording</dt><dd id="suggested-text"></dd></dl>
+        <p id="resolution"></p><p id="customer-note"></p><details id="history-panel" open><summary>Progress history</summary><ol id="activity" aria-label="Request history"></ol></details>
+        <form id="review-form" hidden><p>Please check the updated website before responding.</p><a id="review-page" target="_blank" rel="noopener noreferrer">Check the updated page</a><button id="approve" type="button">Looks good</button><label for="adjustment">What still needs adjustment? (required when requesting changes)</label><textarea id="adjustment" rows="3" maxlength="2000"></textarea><button id="request-changes" type="submit">Request an adjustment</button></form>
+        <details id="screenshots-panel" open><summary>Original feedback screenshots</summary><div class="screenshots"><figure><figcaption data-label="selectedArea">Selected area</figcaption><img id="region" alt="Original selected area" hidden></figure><figure><figcaption data-label="fullScreenshot">Full screenshot</figcaption><img id="full" alt="Captured viewport" hidden></figure></div></details>
+        <form id="status-form"><label for="status" data-label="status">Status</label><select id="status"><option value="open" data-label="open">Submitted</option><option value="reviewed">Reviewed</option><option value="in_progress">In progress</option><option value="ready_for_review">Ready for customer review</option><option value="changes_requested">Adjustment requested</option><option value="approved" disabled>Approved by customer</option><option value="fixed" data-label="fixed">Fixed</option><option value="wontfix" data-label="wontfix">Won't fix</option></select><label for="note" data-label="note">Note for the reporter</label><textarea id="note" rows="3" maxlength="2000"></textarea><button id="save" type="submit" data-label="save">Save status</button></form>
+
+        <details id="technical"><summary data-label="details">Page context and browser errors</summary><pre id="context"></pre></details>
       </div>
     </section>
   </main>

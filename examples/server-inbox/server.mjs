@@ -28,7 +28,7 @@ else if (process.env.BUGFRAME_AUTH_MODULE) {
 }
 if (!authorize && !process.env.BUGFRAME_ADMIN_TOKEN) throw new Error('Configure BUGFRAME_AUTH_MODULE, BUGFRAME_ADMIN_TOKEN, or explicitly opt into BUGFRAME_OWNER_DEMO=1.');
 const bf = createBugframe({
-  dir: join(dataDir, 'reports'), basePath: '/api/bugframe', authorize, adminToken: owner?.adminToken ?? process.env.BUGFRAME_ADMIN_TOKEN,
+  dir: join(dataDir, 'reports'), invitations: !owner && Boolean(authorize) ? true : undefined, basePath: '/api/bugframe', authorize, adminToken: owner?.adminToken ?? process.env.BUGFRAME_ADMIN_TOKEN,
   onReport: report => appendFile(join(dataDir, 'events.ndjson'), JSON.stringify({ event: 'report.created', id: report.id, at: report.createdAt }) + '\n', { mode: 0o600 }),
 });
 const inbox = createInbox({ bugframe: bf, siteName: process.env.BUGFRAME_SITE_NAME ?? 'Report inbox', loginUrl: owner ? '/owner' : process.env.BUGFRAME_LOGIN_URL });

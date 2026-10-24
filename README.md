@@ -2,33 +2,32 @@
 
 [![CI](https://github.com/vmatheus3/bug-frame/actions/workflows/ci.yml/badge.svg)](https://github.com/vmatheus3/bug-frame/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-c2410c.svg)](LICENSE)
-[![Download](https://img.shields.io/badge/download-v0.3.0-c2410c.svg)](https://github.com/vmatheus3/bug-frame/releases/tag/v0.3.0)
+[![Download](https://img.shields.io/badge/download-v0.4.0-c2410c.svg)](https://github.com/vmatheus3/bug-frame/releases/tag/v0.4.0)
 
 ![Bugframe: frame the bug and send the context](docs/images/bugframe-overview.png)
 
-**Drag a box around what is wrong, say what you expected, press send.** Bugframe is a small drop-in "report a problem"
-button for any website or web app. Every report arrives with a screenshot of the exact area, the page link, the screen
-size, the element under the box and the recent console errors, ready for a person or an AI coding agent to fix.
+**Point to anything you want to improve.** Bugframe is a small drop-in website feedback tool for bugs, content changes, design improvements, and new ideas. Customers frame an area, describe the change, and review the result. Developers get screenshots and technical context in a private inbox. Every request includes a screenshot of the marked area, page link, screen size, and element context. Optional console capture adds recent errors for debugging.
 
 **Free and open source, under the MIT license.** Use it in personal or commercial projects, modify it, and share it.
 Run it on your own infrastructure or download reports as ZIP files. No Bugframe account or subscription is required;
 you cover any hosting you choose and any optional AI service you use to fix reports. Console capture is opt-in.
 
 ```
- tester / owner                 your site                  your server               you or your AI agent
+ customer / developer                 your site                  your server               you or your AI agent
  ──────────────                 ─────────                  ───────────               ────────────────────
-  ?bugs=1  ───────────────▶  [ bug button ]
+  ?bugs=1  ───────────────▶  [ feedback ]
   drag a box, type  ─────▶   region.png + full.png  ───▶  bug-reports/<id>/   ───▶   bugframe export
                               + url, viewport,             report.json                 → WORKLIST.md (by page)
-                                element path, console      region.png                  → agent fixes, proves, closes
-  "My reports" ◀──────────── status + fix note  ◀─────────  full.png                   bugframe close <id> --note …
+                                element path, console      region.png                  → developer delivers for review
+  "My requests" ◀──────────── status + review note  ◀─────────  full.png                   bugframe close <id> --note …
 ```
 
 ## How it works
 
-1. Open your page with `?bugs=1`, click the bug button, and choose **Report a problem on this page**.
-2. Drag a box around the problem, describe what you expected, and send the report.
-3. Review the screenshot and page context, fix the problem, and close the report with a note.
+1. Open your page with `?bugs=1`, click the feedback button, and choose **Leave feedback on this page**.
+2. Frame an area, choose a feedback kind, describe the change, and send it.
+3. Developers review the context, make the agreed change, and mark it ready for customer review.
+4. The original customer chooses **Looks good** or requests an adjustment. Only that customer can approve their request.
 
 | Frame the problem | Describe it and send |
 | --- | --- |
@@ -59,7 +58,7 @@ npm run example
 ```
 
 Open <http://127.0.0.1:4455/?bugs=1> and follow **Sign in as an approved tester**. The terminal prints a random demo password.
-Once signed in, report the deliberately wrong invoice total, then try **My reports**. Signing out revokes the session.
+Once signed in, report the deliberately wrong invoice total, then try **My requests**. Signing out revokes the session.
 Reports are stored in `examples/plain-html/reports/`. This localhost demo uses an HttpOnly session cookie; integrate your own website login in production.
 In another terminal in the repository:
 
@@ -71,11 +70,11 @@ node src/cli/bin.mjs --dir ./examples/plain-html/reports close <id> --note "Fixe
 
 ### Add it to your own project
 
-Install the built package from the [GitHub release](https://github.com/vmatheus3/bug-frame/releases/tag/v0.3.0).
+Install the built package from the [GitHub release](https://github.com/vmatheus3/bug-frame/releases/tag/v0.4.0).
 This installation does not depend on a package named `bugframe` being published to the npm registry:
 
 ```bash
-npm install https://github.com/vmatheus3/bug-frame/releases/download/v0.3.0/bugframe-0.3.0.tgz
+npm install https://github.com/vmatheus3/bug-frame/releases/download/v0.4.0/bugframe-0.4.0.tgz
 # First connect your server-side login verifier as described under "Access control" below.
 npx bugframe serve --dir ./bug-reports --port 4455 --auth-module ./bugframe-auth.mjs
 ```
@@ -92,7 +91,7 @@ Add the widget to any page (script tag, no build step):
 > so the browser is allowed to call it.
 
 Only load the widget for signed-in users with reporting permission, and verify that permission on the API.
-For an approved user, open the page with `?bugs=1`. A bug button appears (and stays, until `?bugs=0`). Click it, choose "Report a problem on this
+For an approved user, open the page with `?bugs=1`. A feedback button appears (and stays, until `?bugs=0`). Click it, choose "Leave feedback on this
 page", drag a box, describe it, send. Then:
 
 ```bash
@@ -105,6 +104,43 @@ No server at all? Use download mode: add `data-download` instead of `data-endpoi
 sends you; `npx bugframe import report.zip` unpacks it. See [examples/static-download](examples/static-download).
 
 The release includes the standalone browser bundle, an installable package with types, and a checksum file.
+
+## Customer invitations and approvals (0.4.0)
+
+Enable invitations on one Bugframe instance per website/project and connect your **existing** verified account system:
+
+```js
+const bf = createBugframe({
+  dir: '/private/bugframe/reports', basePath: '/api/bugframe', invitations: true,
+  async authorize(request) {
+    const user = (await verifySession(request))?.user; // supplied by your application
+    if (!user || user.disabled) return null;
+    if (user.role === 'admin') return { id: String(user.id), role: 'admin' };
+    // Login alone grants no reporting access. Bugframe checks an accepted invitation on every request.
+    return { id: String(user.id), role: 'user', email: user.email, emailVerified: user.emailVerified === true };
+  },
+});
+const inbox = createInbox({ bugframe: bf, siteName: 'My website', loginUrl: '/login', siteUrl: '/?bugs=1' });
+// Mount inbox and bf on the same origin using toNodeListener or your framework adapter.
+```
+
+1. In `/bugs/`, open **Customer invitations**, enter the customer's account email, and choose an access duration.
+2. Copy the link shown once and send it through your usual channel. Bugframe does not send emails. The customer signs in through your website using that verified email, then accepts. The sign-in link opens a new tab so the invitation remains available.
+3. After acceptance, the customer opens the website to leave feedback, or `/bugs/review` to follow their requests. Load the widget only after `/access` succeeds. `?bugs=1` controls visibility, never authorization.
+4. Developers move requests through **Submitted → Reviewed → In progress → Ready for your review**. Add a plain-language note explaining the delivered change.
+5. The original reporter approves or requests an adjustment with a note. A new delivery increments `reviewVersion`; responses from old tabs or repeat submissions receive HTTP 409. The request keeps its latest 100 status events.
+
+`kind` is `bug` (default for old reports), `content`, `design`, or `idea`. Content requests can include optional current and suggested wording. Custom `types` remain extra tags. Submission acknowledges receipt; it does not promise scope approval or implementation. Ready status records a developer's delivery note; it does not deploy code or create a new screenshot automatically. Customers should check the linked live page before approving.
+
+Invitation secrets are random, stored only as hashes, consumed once, and bound to the verified account on acceptance. Links keep the secret in a fragment and remove it from browser history when opened. Access expires after 7 days by default (maximum 30), **including after acceptance**. Revoke it in the developer inbox to remove access on the next API request. Only one active invitation per email is allowed; revoke it before replacing it. A new invitation for the same verified account restores access to that account's existing requests.
+
+Return `role: 'user'` for invitation-only customers. Existing `role: 'client'` accounts have independent reporting permission from your host; manage their access in your host, not through invitations. Return `null` for disabled accounts and recheck session expiry/revocation. Do not mark an email verified just because it was typed into a form. Bind each instance to its project/tenant, include tenant identity in account IDs, and never trust a browser-provided email, role, or ID.
+
+Invitation consumption and review mutation serialization currently require one API process/writer per project, including with custom stores. Multi-replica mutation coordination is not supplied in this version. While the API is running, use the remote CLI so mutations pass through that writer; direct filesystem CLI mutations require exclusive access with the API stopped. Submission, invitation acceptance, and review rates are limited per account and IP with the configured in-memory rate policy. Put shared limits at the gateway for multiple replicas.
+
+**Try the complete flow locally:** `npm run example` prints separate tester, developer, and invitation-only customer passwords. Sign in as the developer, invite `customer@example.test`, then sign in as the customer in another browser profile. This fixed email is a localhost demonstration, not production email verification.
+
+**Upgrade from 0.3.x:** upgrade the widget, server, and any custom status consumers together. Existing report files need no migration; `open`, `fixed`, and `wontfix` remain supported. New statuses are `reviewed`, `in_progress`, `ready_for_review`, `changes_requested`, and `approved`. `fixed` is a legacy developer resolution, **not** customer approval. Custom storage must retain the new feedback/review fields and accept the expanded statuses. Invitations are opt-in, so existing authorization stays in effect until configured. Use `bugframe ready <id> --note "what changed"` locally or remotely after deploying and verifying a change; only the reporter can approve through the customer UI. `list --open` includes unresolved reviews; `export` excludes requests already waiting for customer review.
 
 ## Server-only reporting
 
@@ -132,7 +168,7 @@ available when allowed, except for authorization failures (401/403).
 | Vue / Nuxt / Svelte / SvelteKit / Angular | call `init()` on mount - [examples/vue-svelte](examples/vue-svelte) |
 | Server: Node http, Express, Fastify, Connect | `toNodeListener(bf)` / `expressMiddleware(bf)` - [examples/express](examples/express) |
 | Server: Next.js, SvelteKit, Remix, Hono, Workers, Deno, Bun | `routeHandlers(bf)` or `bf.handle(request)` (plain `Request` to `Response`) |
-| Server: not Node (PHP, Python, Go...) | Run `bugframe serve` beside it, or implement the 4 HTTP routes below; the JSON shape is documented here |
+| Server: not Node (PHP, Python, Go...) | Run `bugframe serve` beside it, or implement the HTTP routes below; the JSON shape is documented here |
 
 ```js
 import { init } from 'bugframe';
@@ -193,7 +229,7 @@ For the script tag, options map to `data-*` attributes (`data-endpoint`, `data-t
 | `offset` | `{x:0,y:0}` | Extra pixels from the corner. |
 | `avoid` | `[]` | CSS selectors of other floating buttons (chat bubbles, cookie buttons). The button slides along the edge to stay clear of them. |
 | `zIndex` | `2147483000` | Stacking of the widget layers. |
-| `types` | five defaults | Chip labels. `[]` hides the chips. |
+| `types` | `[]` | Optional extra tag chips. The four built-in feedback kinds remain available. |
 | `strings`, `locale` | `'auto'` | Replace any text; built-in `en`, `es`, `pt`. |
 | `captureConsole` | `false` | Record console errors and uncaught exceptions of the last minute (opt-in). |
 | `metadata` | none | `() => object` (sync or async) merged into every report: app version, user id, current mode, feature flags. Max 8 KB. |
@@ -253,12 +289,13 @@ createServer(toNodeListener(bf)).listen(4455);
 | `basePath` | `''` | URL prefix the API is mounted under (must match your mount). |
 | `clientTokens` | deprecated | Ignored for authorization. Public widget tokens never grant access. |
 | `adminToken` | none | `Authorization: Bearer ...`: list everyone's reports, read full reports, close. |
-| `authorize` | deny | Verify login and reporting permission; return `{ id, role: 'client' }` or `{ id, role: 'admin' }`, otherwise `null`. |
+| `authorize` | deny | Verify login and permissions. Return `client`/`admin` for approved accounts, or `user` with a verified email for invitation-only accounts. Otherwise return `null`. |
+| `invitations` | disabled | `true` uses `dir/.invitations`; `{ storage: adapter }` supplies a separate invitation store. Requires verified host accounts. |
 | `allowedOrigins` | none | Cross-site browser origins allowed. Origin approval does not bypass login authorization; prefer a same-origin session API. |
 | `maxBodyBytes`, `maxImageBytes`, `maxDescription` | 24 MB, 10 MB, 4000 | Hard limits (413 / 400). |
 | `rateLimit` | 10 / minute | Separate limits for verified account and IP. In-memory per instance; `false` disables. 429 with `Retry-After`. |
 | `trustProxy` | `false` | Read the IP from `X-Forwarded-For` (only behind a proxy you control). |
-| `publicList` | `true` | `false`: clients see no "My reports". |
+| `publicList` | `true` | `false`: clients see no "My requests". |
 | `webhook` | none | `{ url, secret, includeImages }`: POST `report.created` with `x-bugframe-signature: sha256=<hmac>`. Failures never fail a report. |
 | `onReport`, `logger` | none | Hooks. |
 
@@ -266,11 +303,15 @@ HTTP routes (relative to `basePath`):
 
 | Route | Who | |
 | --- | --- | --- |
-| `POST /reports` | client | JSON `{ description, types, context, region, full }` with PNG data URLs. `201 { id, status }`. |
+| `POST /reports` | client | JSON `{ description, kind?, currentText?, suggestedText?, types, context, region, full }` with PNG data URLs. `201 { id, status }`. |
 | `GET /reports` | approved account | Only reports belonging to the verified account. Admin: `?all=1`. |
 | `GET /reports/:id/region.png`, `/full.png` | client (own) / admin | The pictures. |
 | `GET /reports/:id` | admin | Full report. |
-| `PATCH /reports/:id` | admin | `{ status: 'open'\|'fixed'\|'wontfix', note }`. |
+| `PATCH /reports/:id` | admin | `{ status, note }`; developer statuses listed below. Customer approval cannot be set here. |
+| `POST /reports/:id/review` | original reporter | `{ action: "approve" \| "request_changes", reviewVersion, note? }`. Only a current delivery can be reviewed; adjustments require a note. |
+| `POST /invitations`, `GET /invitations` | admin | Create `{ email, expiresInDays?: 7 }` (1–30 days), or list without secrets. Creation returns a one-use `token` once. |
+| `POST /invitations/accept` | signed-in `user` | `{ token }`; requires a matching verified email. No login session is created. |
+| `PATCH /invitations/:id` | admin | `{ status: "revoked" }`; removes invitation-based access on the next request. |
 | `GET /health` | anyone | `{ ok: true }`. |
 | `GET /access` | approved account | `{ role: 'client' \| 'admin' }`; checks existing authorization, creates no session. |
 
@@ -278,7 +319,7 @@ Storage adapters: implement `create / get / list / update / readFile` ([examples
 
 ## Optional private inbox
 
-`createInbox` adds a browser interface for administrators without replacing your login system:
+`createInbox` adds a developer inbox and a separate customer request view without replacing your login system:
 
 ```js
 import { createInbox, toNodeListener } from 'bugframe/server';
@@ -291,13 +332,11 @@ createServer((req, res) => inbox.matches(req.url) ? review(req, res) : api(req, 
 ```
 
 The inbox lists reports, shows selected/full screenshots and captured page context/browser errors, and lets admins update
-status with a fix note. Report text is rendered as text, not HTML. Every inbox page, asset, report, and screenshot rechecks
-server authorization; ordinary reporters receive 403 for the inbox. Pages use no-store caching, a restricted CSP, and noindex.
+status with a fix note. Report text is rendered as text, not HTML. The administrator page at `/bugs/` requires admin access. Approved customers use `/bugs/review` to see their own requests, screenshots, and progress without technical logs or administrative controls. Shared UI assets require approved access, and the API rechecks authorization for every request. Pages use no-store caching, a restricted CSP, and noindex.
 
 Configure `basePath`, the same-origin `apiBase`, `siteName`, an existing `loginUrl`, or `labels` (`refresh`, `reports`, `empty`,
 `choose`, `selectedArea`, `fullScreenshot`, `status`, `open`, `fixed`, `wontfix`, `note`, `save`, `details`). The inbox uses
-same-origin session cookies; never embed an admin bearer token in its JavaScript. It does not provide account invitations,
-password recovery, or your production sign-in flow.
+same-origin session cookies; never embed an admin bearer token in its JavaScript. `siteUrl` links back to the reviewed website (default `/?bugs=1`). It does not supply production sign-in, email delivery, or password recovery.
 
 See [the portable persistent-hosting example](examples/server-inbox/README.md), including an explicitly optional single-owner
 session demonstration. Keep the private data folder outside source deployments and public/static roots, and back it up separately.
@@ -308,14 +347,15 @@ session demonstration. Keep the private data folder outside source deployments a
 bugframe [--dir ./bug-reports] <command>
   list [--open] [--json]            show [id] [--json]
   export [--all] [--out FILE]       close <id> --note "..." [--status fixed|wontfix]
+  ready <id> --note "what changed and what to review"
   reopen <id>                       import <report.zip>
-  [--remote HTTPS_API_URL --credentials FILE --timeout 30000] list|show|close|reopen
+  [--remote HTTPS_API_URL --credentials FILE --timeout 30000] list|show|close|ready|reopen
   serve [--port 4455] [--origin URL]... [--auth-module FILE] [--admin-token T] [--webhook URL]
 ```
 
 `--dir` can also come from `BUGFRAME_DIR`. `serve` reads `BUGFRAME_ADMIN_TOKEN` and `BUGFRAME_AUTH_MODULE`.
 An auth module exports `authorize(request)` and verifies your existing login. Without a module, only the admin credential is accepted.
-Startup requires at least one of those settings; public `--client-token` access has been removed. `close` writes the note to `report.json`; the server reads it, so the reporter sees it in "My reports".
+Startup requires at least one of those settings; public `--client-token` access has been removed. `close` writes the note to `report.json`; the server reads it, so the reporter sees it in "My requests".
 
 ### Remote agent commands
 
@@ -327,6 +367,7 @@ Remote mode is explicit and never reads a local report folder:
 # Make the directory private (700) and the file private (600).
 bugframe --remote https://example.com/api/bugframe list --open
 bugframe --remote https://example.com/api/bugframe show <id>
+bugframe --remote https://example.com/api/bugframe ready <id> --note "The update is live. Please review the page."
 bugframe --remote https://example.com/api/bugframe close <id> --note "Deployed and verified the fix"
 bugframe --remote https://example.com/api/bugframe reopen <id>
 ```
@@ -348,7 +389,7 @@ explicitly requested fixes have been deployed and verified.
    [`FIX_BUGS_SHORT.md`](prompts/FIX_BUGS_SHORT.md)). It looks at the pictures, groups reports by cause, reproduces each at the
    reported size, fixes the root cause, proves it with before/after screenshots, runs the tests and closes every report with a
    plain-language note.
-4. You review the diff. The reporters see "Fixed" and the note next time they open "My reports".
+4. You review the diff. The reporters see "Fixed" and the note next time they open "My requests".
 
 ## Privacy and security notes
 

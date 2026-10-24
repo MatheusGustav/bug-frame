@@ -11,7 +11,7 @@ test('phone: the button sits clear of the chat bubble and inside the safe area, 
   expect(fab.width).toBeGreaterThanOrEqual(44);
   await page.locator('.fab').click();
   const menu = (await page.locator('.menu').boundingBox())!; expect(menu.x).toBeGreaterThanOrEqual(0); expect(menu.x + menu.width).toBeLessThanOrEqual(vp.width);
-  await page.getByRole('menuitem', { name: /Report a problem/ }).click();
+  await page.getByRole('menuitem', { name: /Leave feedback/ }).click();
   await page.getByRole('button', { name: 'Whole screen' }).click();
   const sheet = (await page.locator('.sheet').boundingBox())!;
   expect(sheet.x).toBeGreaterThanOrEqual(0); expect(sheet.x + sheet.width).toBeLessThanOrEqual(vp.width + 1);

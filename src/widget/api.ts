@@ -1,7 +1,7 @@
-import type { ReportContext, ReportStatus, ReportSummary } from './types';
+import type { FeedbackKind, ReportContext, ReportStatus, ReportSummary } from './types';
 
 export type ApiConfig = { endpoint: string; token?: string; reporterId: string; fetch: typeof fetch };
-export type SendPayload = { description: string; types: string[]; context: ReportContext; region: string; full: string };
+export type SendPayload = { kind: FeedbackKind; currentText: string; suggestedText: string; description: string; types: string[]; context: ReportContext; region: string; full: string };
 
 const trim = (s: string) => s.replace(/\/+$/, '');
 const headers = (c: ApiConfig, json = false): Record<string, string> => ({ ...(c.token ? { 'x-bugframe-token': c.token } : {}), 'x-bugframe-reporter': c.reporterId, ...(json ? { 'content-type': 'application/json' } : {}) });
@@ -25,4 +25,9 @@ export async function fetchThumb(c: ApiConfig, id: string): Promise<string | nul
     if (!res.ok) return null;
     return URL.createObjectURL(await res.blob());
   } catch { return null; }
+}
+
+export async function reviewReport(c: ApiConfig, id: string, action: 'approve' | 'request_changes', reviewVersion: number, note = ''): Promise<void> {
+  const res = await c.fetch(`${trim(c.endpoint)}/reports/${encodeURIComponent(id)}/review`, { method: 'POST', headers: headers(c, true), body: JSON.stringify({ action, reviewVersion, note }) });
+  if (!res.ok) throw new ApiError(res.status, `Review failed with status ${res.status}`);
 }
