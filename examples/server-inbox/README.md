@@ -62,7 +62,7 @@ BUGFRAME_DATA_DIR/
 Keep this folder on a persistent volume outside release/build directories so deployments replace code without deleting
 reports. New directories/files use 0700/0600; existing permissions are not silently rewritten, so check them before reusing
 an older folder. The filesystem CLI uses `--dir "$BUGFRAME_DATA_DIR/reports"`; remote agents use the hosted API instead.
-Use one server process/writer per directory for invitation and review coordination. Back up the entire private data folder separately from source deployments. Encrypt and restrict backups, set an appropriate
+Use one API process/writer per project for invitation and review coordination. Use remote CLI commands while it runs; stop the API before making direct filesystem CLI mutations. Back up the entire private data folder separately from source deployments. Encrypt and restrict backups, set an appropriate
 retention period for reports/images/event logs, and remove expired data/backups according to your own retention policy.
 Reports already loaded in a browser cannot be recalled; sign-out should destroy the widget and refresh open inboxes.
 
