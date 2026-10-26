@@ -5,18 +5,76 @@ uses [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Added
-- Remote CLI mode: `--remote URL` (or `BUGFRAME_REMOTE`) runs `list`, `show`, `export`, `close` and `reopen` against a hosted
-  server's admin API, with the admin token from `--token` or `BUGFRAME_REMOTE_TOKEN`. `show` and `export` download the reports
-  they print into `--dir`, and the work list tells the agent to close reports with `--remote`. The token is only sent over HTTPS
-  (plain HTTP only to localhost), redirects are refused, downloads are checked like imports, a report with broken pictures is
-  skipped, downloads never overwrite a report that was not downloaded, and a downloaded copy cannot be closed or reopened
-  locally, where the reporter would never see the note.
+### Changed
+- Remote CLI mode: `--remote URL` (or `BUGFRAME_REMOTE`) runs `list`, `show`, `export`, `close`, `ready` and `reopen` against a
+  hosted server's admin API through the same commands as the local folder. `show` and `export` download the reports they print
+  into `--dir`, so the work list keeps its pictures, and it tells the agent to close reports with `--remote`. The admin token
+  comes from `BUGFRAME_REMOTE_TOKEN` or a private credential file (`--credentials`, `BUGFRAME_CREDENTIALS_FILE` or
+  `~/.config/bugframe/credentials.json`); `BUGFRAME_ADMIN_TOKEN`, this machine's own server secret, is never sent. `--timeout`
+  bounds each request (default 60000 ms). The token is only sent over HTTPS (plain HTTP only to localhost), URLs with embedded
+  credentials and redirects are refused, downloads are checked like imports, a report with broken pictures is skipped, downloads
+  never overwrite a report that was not downloaded, and a downloaded copy cannot be changed locally, where the reporter would
+  never see the note. `reopen` keeps the report's note.
 
 ### Security
 - Keep control characters in report text away from the terminal: `list`, `show` and `WORKLIST.md` print them as spaces, and
-  `--json` output and `import` messages as `\u` escapes, so a report cannot recolor, retitle or rewrite the screen. In `show`,
-  every line of a description is indented, so none can pose as a field.
+  `--json` output and `import` messages as `\u` escapes, so a report cannot recolor, retitle or rewrite the screen. This covers
+  content wording and customer review notes too. In `show`, every line of a description, wording or note is indented, so none
+  can pose as a field.
+
+## [0.4.1] - 2026-10-23
+
+### Fixed
+- Complete English, Spanish, and Portuguese support across the developer inbox, customer requests, invitation acceptance, access-denied pages, statuses, dates, validation, and success/error responses. The widget’s authorization copy now consistently refers to feedback.
+- Add a portal language selector, `createInbox({ locale })`, browser language negotiation, and shareable `?lang=en|es|pt` preferences. Switching languages keeps unsaved notes, selected statuses, and pending invitation secrets in memory. The same-origin widget in `auto` mode follows the saved preference.
+- Serve data-free styles and translation helpers to signed-out invitees so the public invitation page renders correctly. Request pages, application JavaScript, reports, and screenshots retain their authorization checks.
+
+### Documentation
+- Replace the three outdated illustrative GitHub images with real screenshots and add invitation, review, approval, Spanish, and Portuguese screenshots.
+- Add a reproducible screenshot command and a fictional client website demo. Captures use disposable sessions/storage and actually change the example headline before the customer approves it.
+- Let the localhost demo test runner explicitly raise its sign-in limit for the expanded browser matrix; the default remains 20 attempts per minute.
+
+## [0.4.0] - 2026-10-23
+
+### Added
+- Broader feedback kinds: bugs, content changes, design improvements, and ideas. Content requests can include current and suggested wording. The customer widget uses friendly feedback/request language in English, Spanish, and Portuguese.
+- Optional customer invitations in the developer inbox, bound to verified host-account email and then stable account identity. One-use random secrets are stored hashed, links use fragments, access expires (default 7, maximum 30 days), and admins can revoke it immediately for subsequent requests.
+- Separate customer request page at `/bugs/review`, showing only the reporter's own feedback, screenshots, developer updates, and review controls; technical context and invitation management remain in the developer view.
+- Reviewed, in-progress, ready-for-review, adjustment-requested, and customer-approved statuses with a bounded progress history. Only the original reporter can approve a current delivery; stale or duplicate responses are refused.
+- Local and remote `bugframe ready <id> --note "what changed"` commands. Coding worklists include content/review context and exclude deliveries already waiting for customer review.
+
+### Changed / upgrade notes
+- Upgrade server and widget together. Old report files and `open`/`fixed`/`wontfix` remain compatible; update custom status consumers/adapters for the expanded statuses and retain the new fields. `fixed` remains a developer resolution, not customer approval.
+- Default type chips are replaced by the four feedback kinds; `types` still supplies optional extra tags. Existing text overrides remain available.
+- Invitations are opt-in and use the website's existing verified sign-in system; they do not supply accounts, email delivery, or password recovery. Use `role: 'user'` for invitation-only customers. Existing `client` permissions remain controlled by the host.
+- Invitation consumption and review updates require one API process/writer per project, including custom stores. Multi-replica mutation coordination is not supplied in this version; use shared gateway limits where appropriate.
+
+### Security
+- Recheck invitation membership, expiry, and the host login on each API request. Deny unverified/mismatched emails, replayed invitation secrets, and unauthorized invitation management or review actions.
+- Serialize review mutations within an instance and require the delivered review version. Clear private browser previews after authorization failures/page exit and ignore stale list responses.
+- Same-origin checks now compare the full origin, including its scheme.
+
+## [0.3.0] - 2026-10-23
+
+### Added
+- Supported `allowDownloadFallback: false` widget policy and script-tag attributes for server-only reporting. Failed/offline
+  requests retain the report for retry; explicit ZIP download workflows and default fallback behavior remain available.
+- Optional `createInbox` administrator interface with configurable paths/name/labels, private screenshots, safe report rendering,
+  status notes, and existing-session authorization. `GET /access` checks the current verified role without creating a session.
+- Explicit remote CLI mode for list/show/close/reopen, private environment/file credentials, verified HTTPS, redirect refusal,
+  bounded responses and request timeouts. Local CLI behavior remains supported.
+- Portable persistent-hosting example with deployment-independent storage, optional single-owner sessions, private key files,
+  metadata-only report-created events, and guidance for backups, key rotation, proxy trust, and integration migration.
+
+### Fixed
+- Explicit server mode rejects missing/blank endpoints instead of silently producing local ZIP files.
+- New filesystem report directories/files use private 0700/0600 permissions, including atomic JSON replacement files.
+- Node adapters honor forwarded IP/protocol only with explicit proxy trust and handle comma-separated protocol headers.
+
+### Security / development
+- Upgrade the development-only Vitest runner to patched 4.1.12, removing vulnerable mocker/worker-pool dependencies. Runtime
+  support stays Node 18.17+; development/widget tests require Node 20+. CI retains native server/CLI checks on Node 18.
+- Existing server-verified account permissions, admin restrictions, ownership, and authorization-failure ZIP protections remain enforced.
 
 ## [0.2.0] - 2026-10-17
 

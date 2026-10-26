@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="{{LANG}}">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex,nofollow"><title data-i18n="pageTitle">{{T:pageTitle}}</title>
+  <link rel="stylesheet" href="{{BASE}}/inbox.css"><script src="{{BASE}}/inbox.js" type="module"></script>
+</head>
+<body data-config="{{CONFIG}}">
+  <header><div><p class="eyebrow" id="eyebrow" data-i18n="{{EYEBROW}}">{{T:eyebrow}}</p><h1>{{NAME}}</h1></div><div class="header-actions"><div><label for="language" data-i18n="language">{{T:language}}</label><select id="language"><option value="en"{{SEL:en}}>English</option><option value="es"{{SEL:es}}>Español</option><option value="pt"{{SEL:pt}}>Português</option></select></div><button id="refresh" data-i18n="refresh">{{T:refresh}}</button></div></header>
+  <p id="intro" data-i18n="{{INTRO}}">{{T:intro}}</p>
+  <p><a id="site-link" href="/" data-i18n="backToSite">{{T:backToSite}}</a></p>
+  <p id="message" role="status" aria-live="polite"></p>
+  <details id="invitations-panel" hidden><summary data-i18n="invitations">{{T:invitations}}</summary>
+    <p data-i18n="invitationHelp">{{T:invitationHelp}}</p>
+    <form id="invite-form" novalidate><label for="invite-email" data-i18n="customerEmail">{{T:customerEmail}}</label><input id="invite-email" type="email" maxlength="254" required autocomplete="email"><label for="invite-days" data-i18n="accessDays">{{T:accessDays}}</label><input id="invite-days" type="number" min="1" max="30" value="7" required><button id="create-invite" type="submit" data-i18n="createInvite">{{T:createInvite}}</button></form>
+    <p id="invite-result" hidden><label for="invite-link" data-i18n="copyInvite">{{T:copyInvite}}</label><input id="invite-link" type="text" readonly><small id="invite-expiry"></small></p><ul id="invitations"></ul>
+  </details>
+  <main>
+    <aside aria-labelledby="reports-title"><h2 id="reports-title" data-i18n="reports">{{T:reports}}</h2><p id="empty" data-i18n="empty" hidden>{{T:empty}}</p><ul id="reports"></ul></aside>
+    <section aria-labelledby="description">
+      <p id="choose" data-i18n="choose">{{T:choose}}</p>
+      <div id="detail" hidden>
+        <h2 id="description" tabindex="-1"></h2><p id="info"></p><a id="page-link" target="_blank" rel="noopener noreferrer" hidden data-i18n="openPage">{{T:openPage}}</a>
+        <dl id="wording" hidden><dt data-i18n="currentText">{{T:currentText}}</dt><dd id="current-text"></dd><dt data-i18n="suggestedText">{{T:suggestedText}}</dt><dd id="suggested-text"></dd></dl>
+        <p id="resolution"></p><p id="customer-note"></p><details id="history-panel" open><summary data-i18n="history">{{T:history}}</summary><ol id="activity" data-i18n="requestHistory" data-i18n-attr="aria-label" aria-label="{{T:requestHistory}}"></ol></details>
+        <form id="review-form" hidden><p data-i18n="checkFirst">{{T:checkFirst}}</p><a id="review-page" target="_blank" rel="noopener noreferrer" data-i18n="checkPage">{{T:checkPage}}</a><button id="approve" type="button" data-i18n="approve">{{T:approve}}</button><label for="adjustment" data-i18n="adjustment">{{T:adjustment}}</label><textarea id="adjustment" rows="3" maxlength="2000"></textarea><button id="request-changes" type="submit" data-i18n="requestChanges">{{T:requestChanges}}</button></form>
+        <details id="screenshots-panel" open><summary data-i18n="screenshots">{{T:screenshots}}</summary><div class="screenshots"><figure><figcaption data-i18n="selectedArea">{{T:selectedArea}}</figcaption><img id="region" alt="{{T:regionAlt}}" data-i18n="regionAlt" data-i18n-attr="alt" hidden></figure><figure><figcaption data-i18n="fullScreenshot">{{T:fullScreenshot}}</figcaption><img id="full" alt="{{T:fullAlt}}" data-i18n="fullAlt" data-i18n-attr="alt" hidden></figure></div></details>
+        <form id="status-form"><label for="status" data-i18n="status">{{T:status}}</label><select id="status"><option value="open" data-i18n="open">{{T:open}}</option><option value="reviewed" data-i18n="reviewed">{{T:reviewed}}</option><option value="in_progress" data-i18n="inProgress">{{T:inProgress}}</option><option value="ready_for_review" data-i18n="readyAdmin">{{T:readyAdmin}}</option><option value="changes_requested" data-i18n="changesRequested">{{T:changesRequested}}</option><option value="approved" disabled data-i18n="approvedAdmin">{{T:approvedAdmin}}</option><option value="fixed" data-i18n="fixed">{{T:fixed}}</option><option value="wontfix" data-i18n="wontfix">{{T:wontfix}}</option></select><label for="note" data-i18n="note">{{T:note}}</label><textarea id="note" rows="3" maxlength="2000"></textarea><button id="save" type="submit" data-i18n="save">{{T:save}}</button></form>
+        <details id="technical"><summary data-i18n="details">{{T:details}}</summary><pre id="context"></pre></details>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

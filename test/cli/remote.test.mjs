@@ -3,14 +3,17 @@ import assert from 'node:assert/strict';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { createServer } from 'node:http';
-import { readFile, readdir, access } from 'node:fs/promises';
+import { readFile, readdir, access, writeFile, chmod } from 'node:fs/promises';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createBugframe, toNodeListener } from '../../src/server/index.mjs';
+import { remoteCredentials } from '../../src/cli/remote.mjs';
 import { PNG_B64, body, cleanup, post, tmpDir } from '../helpers.mjs';
 
 const BIN = join(dirname(fileURLToPath(import.meta.url)), '../../src/cli/bin.mjs');
-const ENV = { ...process.env, BUGFRAME_REMOTE_TOKEN: 'adm' }; delete ENV.BUGFRAME_REMOTE; delete ENV.BUGFRAME_DIR; delete ENV.BUGFRAME_ADMIN_TOKEN;
+// HOME points nowhere, so no real ~/.config/bugframe/credentials.json takes part.
+const ENV = { ...process.env, BUGFRAME_REMOTE_TOKEN: 'adm', HOME: '/nonexistent-bugframe-home' };
+for (const k of ['BUGFRAME_REMOTE', 'BUGFRAME_DIR', 'BUGFRAME_ADMIN_TOKEN', 'BUGFRAME_CREDENTIALS_FILE']) delete ENV[k];
 const run = (args, env = {}) => promisify(execFile)('node', [BIN, ...args], { env: { ...ENV, ...env } }).then(r => r.stdout.trim(), e => { e.message = `${e.stderr}`; throw e; });
 const listen = server => new Promise(res => server.listen(0, '127.0.0.1', () => res(`http://127.0.0.1:${server.address().port}`)));
 const seed = async dir => {
@@ -19,7 +22,7 @@ const seed = async dir => {
   return { a: await mk('Footer overlaps the button', 'https://app.test/settings#/billing'), b: await mk('Wrong total on invoice', 'https://app.test/invoices?id=4'), c: await mk('Another settings issue', 'https://app.test/settings#/billing') };
 };
 
-test('remote mode: list, show, export, close, reopen against a hosted server', async () => {
+test('remote mode: list, show, export, close, ready, reopen against a hosted server', async () => {
   const serverDir = await tmpDir(), local = await tmpDir(); const { a, b, c } = await seed(serverDir);
   const bf = createBugframe({ dir: serverDir, basePath: '/api/bugframe', adminToken: 'adm' });
   const server = createServer(toNodeListener(bf)); const api = `${await listen(server)}/api/bugframe`;
@@ -50,7 +53,11 @@ test('remote mode: list, show, export, close, reopen against a hosted server', a
     const reopened = await bf.storage.get(a);
     assert.equal(reopened.status, 'open'); assert.equal(reopened.note, 'Moved the footer'); assert.equal(reopened.closedAt, null);
     assert.equal((await copyOf(a)).status, 'open');
-    assert.match(await remote('export'), /2 reports/);
+    assert.match(await remote('ready', a, '--note', 'Footer moved, check the billing page'), /ready for customer review/);
+    const ready = await bf.storage.get(a);
+    assert.equal(ready.status, 'ready_for_review'); assert.equal(ready.reviewVersion, 1); assert.equal(ready.activity.at(-1).note, 'Footer moved, check the billing page');
+    assert.equal((await copyOf(a)).status, 'ready_for_review');
+    assert.match(await remote('export'), /1 report \(/); // a report waiting for the customer's review is not work
     // pointing --dir at the server's own folder must not turn its reports into copies
     await assert.rejects(() => run(['--dir', serverDir, '--remote', api, 'export']), /holds a report that was not downloaded/);
     assert.equal((await bf.storage.get(c)).downloadedFrom, undefined);
@@ -71,12 +78,16 @@ test('remote mode refuses unsafe or wrong settings with plain errors', async () 
   try {
     await assert.rejects(() => remote('http://bugs.example.com/api/bugframe', 'list'), /must use https:\/\//);
     await assert.rejects(() => remote('not a url', 'list'), /needs the API address/);
+    await assert.rejects(() => remote('https://user:secret@bugs.example.com/api/bugframe', 'list'), /must not carry a user name or password/);
     await assert.rejects(() => run(['--dir', dir, '--remote', api, 'list'], { BUGFRAME_REMOTE_TOKEN: '' }), /needs the server's admin token/);
     // this machine's own server secret is never sent to a remote server
     await assert.rejects(() => run(['--dir', dir, '--remote', api, 'list'], { BUGFRAME_REMOTE_TOKEN: undefined, BUGFRAME_ADMIN_TOKEN: 'adm' }), /needs the server's admin token/);
     await assert.rejects(() => run(['--dir', dir, '--remote', api, 'lsit'], { BUGFRAME_REMOTE_TOKEN: '' }), /Unknown command "lsit"/);
     await assert.rejects(() => run(['--dir', dir, '--remote', api, 'show'], { BUGFRAME_REMOTE_TOKEN: '' }), /show needs an id/);
-    await assert.rejects(() => remote(api, '--token', 'wrong', 'list'), /refused the admin token \(HTTP 401\)/);
+    await assert.rejects(() => run(['--dir', dir, '--remote', api, 'list'], { BUGFRAME_REMOTE_TOKEN: 'wrong' }), /refused the admin token \(HTTP 401\)/);
+    await assert.rejects(() => remote(api, '--token', 'adm', 'list'), /Unknown option '--token'/);
+    await assert.rejects(() => remote(api, '--timeout', 'soon', 'list'), /--timeout must be between/);
+    await assert.rejects(() => run(['--dir', dir, '--timeout', '10', 'list']), /work only with --remote/);
     await assert.rejects(() => remote(`${api}/not-the-api`, 'list'), /did not answer like a Bugframe server/);
     await assert.rejects(() => remote(moved, 'list'), /answered with a redirect/);
     await assert.rejects(() => remote(api, 'close', 'bug-20260101-000000-aaaa', '--note', 'x'), /No report with id bug-20260101-000000-aaaa on http:/);
@@ -119,4 +130,55 @@ test('remote mode checks what it downloads: report ids, fields and pictures', as
     const saved = JSON.parse(await readFile(join(local, id, 'report.json'), 'utf8'));
     assert.deepEqual(saved.types, []); assert.deepEqual(saved.context.elements, [{ path: '', component: '', text: '' }]);
   } finally { server.close(); await cleanup(local); }
+});
+
+test('remote mode reads the token from a private credential file and gives up after --timeout', async () => {
+  const dir = await tmpDir(), file = join(dir, 'credentials.json');
+  const server = createServer(toNodeListener(createBugframe({ dir, adminToken: 'from-file' }))); const api = await listen(server);
+  const stalled = createServer(() => {}); const slow = await listen(stalled);
+  try {
+    await writeFile(file, JSON.stringify({ adminToken: 'from-file' }), { mode: 0o600 });
+    assert.equal(await remoteCredentials(file, {}), 'from-file');
+    assert.equal(await remoteCredentials(file, { BUGFRAME_REMOTE_TOKEN: 'env-token' }), 'env-token');
+    assert.equal(await remoteCredentials(undefined, { BUGFRAME_ADMIN_TOKEN: 'own-server', HOME: '/nonexistent-bugframe-home' }), undefined);
+    assert.equal(await run(['--dir', dir, '--remote', api, '--credentials', file, 'list'], { BUGFRAME_REMOTE_TOKEN: '' }), 'No bug reports.');
+    assert.equal(await run(['--dir', dir, '--remote', api, 'list'], { BUGFRAME_REMOTE_TOKEN: '', BUGFRAME_CREDENTIALS_FILE: file }), 'No bug reports.');
+    if (process.platform !== 'win32') {
+      await chmod(file, 0o644); await assert.rejects(() => remoteCredentials(file, {}), /private, user-owned file/); await chmod(file, 0o600);
+    }
+    await writeFile(file, '{bad json'); await assert.rejects(() => remoteCredentials(file, {}), /Could not read/);
+    await assert.rejects(() => remoteCredentials(file + '-missing', {}), /Could not read/);
+    await assert.rejects(() => run(['--dir', dir, '--remote', slow, '--timeout', '50', 'list']), /did not answer within 50 ms/);
+  } finally { server.close(); stalled.closeAllConnections(); stalled.close(); await cleanup(dir); }
+});
+
+test('remote mode works end to end over verified HTTPS without following redirects', async () => {
+  const { createServer: createHttpsServer } = await import('node:https');
+  const { execFileSync } = await import('node:child_process');
+  const { createMemoryStorage } = await import('../../src/server/index.mjs');
+  const certs = await tmpDir(), local = await tmpDir(), key = join(certs, 'key.pem'), cert = join(certs, 'cert.pem');
+  let server;
+  try {
+    execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1', '-subj', '/CN=localhost', '-addext', 'subjectAltName=IP:127.0.0.1', '-keyout', key, '-out', cert], { stdio: 'ignore' });
+    const bf = createBugframe({ storage: createMemoryStorage(), basePath: '/api/bugframe', adminToken: 'adm' });
+    const { id } = await (await bf.handle(post('https://fixture.test/api/bugframe/reports', body(), { authorization: 'Bearer adm' }))).json();
+    const listener = toNodeListener(bf); let followed = false;
+    server = createHttpsServer({ key: await readFile(key), cert: await readFile(cert) }, (req, res) => {
+      if (req.url.startsWith('/redirect/')) { res.writeHead(302, { location: '/stolen' }); return res.end(); }
+      if (req.url === '/stolen') { followed = true; return res.end('{}'); }
+      listener(req, res);
+    });
+    await new Promise(res => server.listen(0, '127.0.0.1', res));
+    const host = `https://127.0.0.1:${server.address().port}`, api = `${host}/api/bugframe`;
+    const remote = (url, ...args) => run(['--dir', local, '--remote', url, ...args], { NODE_EXTRA_CA_CERTS: cert });
+    assert.equal(JSON.parse(await remote(api, 'list', '--json'))[0].id, id);
+    assert.match(await remote(api, 'export'), /1 report \(downloaded from https:/);
+    await access(join(local, id, 'region.png'));
+    assert.match(await remote(api, 'close', id, '--note', 'Deployed and verified'), /marked fixed/);
+    assert.equal((await bf.storage.get(id)).status, 'fixed');
+    assert.match(await remote(api, 'reopen', id), /reopened/);
+    assert.match(await remote(api, 'ready', id, '--note', 'Please check the deployed update'), /ready for customer review/);
+    await assert.rejects(() => remote(`${host}/redirect`, 'list'), /answered with a redirect/);
+    assert.equal(followed, false);
+  } finally { server?.close(); server?.closeAllConnections(); await cleanup(certs); await cleanup(local); }
 });

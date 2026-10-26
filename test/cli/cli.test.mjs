@@ -44,6 +44,11 @@ test('list, show, export, close, reopen end to end', async () => {
   assert.match(await run(dir, 'export', '--all', '--out', join(dir, 'ALL.md')), /3 reports/);
   assert.match(await run(dir, 'reopen', a), /reopened/);
   assert.equal((await run(dir, 'list', '--open')).split('\n').length, 2);
+  assert.match(await run(dir, 'ready', a, '--note', 'Updated and deployed. Please review.'), /ready for customer review/);
+  assert.equal(JSON.parse(await run(dir, 'show', a, '--json')).reviewVersion, 1);
+  assert.match(await run(dir, 'ready', a, '--note', 'Second delivery'), /ready for customer review/);
+  assert.equal(JSON.parse(await run(dir, 'show', a, '--json')).reviewVersion, 2);
+  assert.match(await run(dir, 'export'), /1 report/); // waiting reviews are excluded from the coding worklist
   void c; await cleanup(dir);
 });
 
@@ -92,9 +97,10 @@ test('report text cannot send control characters to the terminal', async () => {
     const evil = '\x1b[31mred\x1b]0;pwned\x07\r\u009b2J\x7f', description = `Broken ${evil}\nNote: fake field`;
     const bf = createBugframe({ dir, rateLimit: false, authorize: () => ({ id: 'cli-fixture', role: 'client' }) });
     const ctx = body().context;
-    const { id } = await (await bf.handle(post('https://x.test/reports', body({ description, types: [`Layout${evil}`], context: { ...ctx,
+    const { id } = await (await bf.handle(post('https://x.test/reports', body({ description, kind: 'content', currentText: `Old${evil}`, suggestedText: `New${evil}`, types: [`Layout${evil}`], context: { ...ctx,
       url: `https://app.test/a${evil}#/b${evil}`, title: `Title${evil}`, userAgent: `UA${evil}`, metadata: { v: evil },
       elements: [{ path: `div${evil}`, component: `c${evil}`, text: `Save${evil}` }], consoleErrors: [{ at: 'x', message: `boom${evil}` }] } })))).json();
+    await bf.storage.update(id, { reviewNote: `Still wrong${evil}` });
     const png = Buffer.from(PNG_B64, 'base64'), imp = 'bug-20260101-000000-abcd', bad = 'bug-20260101-000000-dcba';
     await writeFile(join(dir, 'reports.zip'), zip({ [`${imp}/report.json`]: JSON.stringify({ createdAt: `2026${evil}`, description: `Imported${evil}` }),
       [`${imp}/region.png`]: png, [`${imp}/full.png`]: png, [`${bad}/report.json`]: evil, [`${bad}/region.png`]: png, [`${bad}/full.png`]: png }));

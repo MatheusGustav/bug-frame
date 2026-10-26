@@ -1,6 +1,9 @@
 import { randomBytes, createHash, timingSafeEqual } from 'node:crypto';
 
-export const STATUSES = ['open', 'fixed', 'wontfix'];
+export const STATUSES = ['open', 'reviewed', 'in_progress', 'ready_for_review', 'changes_requested', 'approved', 'fixed', 'wontfix'];
+export const FEEDBACK_KINDS = ['bug', 'content', 'design', 'idea'];
+export const isOpen = status => !['approved', 'fixed', 'wontfix'].includes(status);
+export const isActionable = status => isOpen(status) && status !== 'ready_for_review';
 export const ID_RE = /^bug-\d{8}-\d{6}-[a-f0-9]{4}$/;
 export const FILE_NAMES = ['region.png', 'full.png'];
 export const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
@@ -64,5 +67,10 @@ export function cleanContext(c) {
 export function summarize(r) {
   let page = '';
   try { const u = new URL(r.context?.url ?? ''); page = u.pathname + u.hash; } catch { page = ''; }
-  return { id: r.id, status: r.status, note: r.note ?? '', createdAt: r.createdAt, description: r.description, types: r.types ?? [], page: page.slice(0, 120) };
+  return { id: r.id, status: r.status, note: r.note ?? '', createdAt: r.createdAt, description: r.description, types: r.types ?? [], ...reviewFields(r), page: page.slice(0, 120) };
+}
+
+/** The feedback kind, wording and review fields, with the defaults of a report written before they existed. */
+function reviewFields(r) {
+  return { kind: r.kind ?? 'bug', currentText: r.currentText ?? '', suggestedText: r.suggestedText ?? '', reviewVersion: r.reviewVersion ?? 0, reviewNote: r.reviewNote ?? '', activity: r.activity ?? [] };
 }
